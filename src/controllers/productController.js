@@ -1,6 +1,7 @@
 // controllers/productController.js
 import Product from "../models/Product.js";
-
+import fs from "fs";
+import csv from "csv-parser";
 // ---------------- PUBLIC ----------------
 
 // Get all products with search and filters
@@ -119,5 +120,65 @@ export const deleteProduct = async (req, res) => {
     res.json({ message: "Product deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+export const importProductsFromCSV = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "CSV file is required" });
+    }
+
+    const filePath = req.file.path;
+    const rows = [];
+
+    fs.createReadStream(filePath)
+      .pipe(csv())
+      .on("data", (row) => rows.push(row))
+      .on("end", async () => {
+        const inserted = [];
+        const failed = [];
+
+        for (const row of rows) {
+          try {
+            if (!row.product_id || !row.slug || !row.name) {
+              failed.push({ row, reason: "Missing required fields" });
+              continue;
+            }
+
+            const existsId = await Product.findOne({ product_id: row.product_id });
+            if (existsId) {
+              failed.push({ row, reason: "product_id already exists" });
+              continue;
+            }
+
+            const existsSlug = await Product.findOne({ slug: row.slug });
+            if (existsSlug) {
+              failed.push({ row, reason: "slug already exists" });
+              continue;
+            }
+
+            const created = await Product.create(row);
+            inserted.push(created);
+
+          } catch (err) {
+            failed.push({ row, reason: err.message });
+          }
+        }
+
+        fs.unlinkSync(filePath);
+
+        return res.status(200).json({
+          message: "CSV import completed",
+          inserted_count: inserted.length,
+          failed_count: failed.length,
+          inserted,
+          failed,
+        });
+      });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: err.message });
   }
 };

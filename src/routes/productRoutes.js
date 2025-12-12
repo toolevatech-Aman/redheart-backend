@@ -10,7 +10,9 @@ import {
 } from "../controllers/productController.js";
 import auth from "../middlewares/authMiddleware.js";
 import { isAdmin } from "../middlewares/isAdmin.js";
-
+import { importProductsFromCSV } from "../controllers/productController.js";
+import { upload } from "../middlewares/upload.js";
+import authMiddleware from "../middlewares/authMiddleware.js";
 const router = express.Router();
 
 // Public APIs
@@ -22,5 +24,12 @@ router.post("/:product_id/review", updateReview); // Add review
 router.post("/", auth, isAdmin, addProduct);
 router.put("/:product_id", auth, isAdmin, editProduct);
 router.delete("/:product_id", auth, isAdmin, deleteProduct);
+router.post(
+  "/product/import",
+  authMiddleware,      // Must be logged in
+  isAdmin,             // Must be admin
+  upload.single("file"),
+  importProductsFromCSV
+);
 
 export default router;
