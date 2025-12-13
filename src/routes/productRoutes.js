@@ -25,7 +25,7 @@ router.post("/", auth, isAdmin, addProduct);
 router.put("/:product_id", auth, isAdmin, editProduct);
 router.delete("/:product_id", auth, isAdmin, deleteProduct);
 router.post(
-  "/product/import",
+  "/import",
   authMiddleware,      // Must be logged in
   isAdmin,             // Must be admin
   upload.single("file"),
