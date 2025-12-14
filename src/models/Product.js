@@ -17,7 +17,7 @@ const productSchema = new mongoose.Schema(
       category_name: { type: String },
       subcategory_id: { type: Number },
       subcategory_name: { type: String },
-      festival_tags: [String],
+      festival_tags: [String], 
       occasion_tags: [String],
       type: { type: String },
     },

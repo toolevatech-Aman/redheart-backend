@@ -151,7 +151,6 @@ const toDate = (val) => {
   return new Date(val);
 };
 
-// ---------- controller ----------
 export const importProductsFromCSV = async (req, res) => {
   try {
     if (!req.file) {
@@ -165,7 +164,6 @@ export const importProductsFromCSV = async (req, res) => {
       .pipe(csv())
       .on("data", (row) => rows.push(row))
       .on("end", async () => {
-
         const inserted = [];
         const failed = [];
 
@@ -188,7 +186,45 @@ export const importProductsFromCSV = async (req, res) => {
               continue;
             }
 
-            // ---------- build product ----------
+            // ---------- Parse add_ons ----------
+            const addOnNames = toArray(row["care_and_logistics.add_ons.name"]);
+            const addOnIds = toArray(row["care_and_logistics.add_ons.product_id"]);
+            const addOnQuantities = toArray(row["care_and_logistics.add_ons.quantity"]).map(toNumber);
+            const addOnOriginalPrices = toArray(row["care_and_logistics.add_ons.original_price"]).map(toNumber);
+            const addOnSellingPrices = toArray(row["care_and_logistics.add_ons.selling_price"]).map(toNumber);
+            const addOnImages = toArray(row["care_and_logistics.add_ons.image_url"]);
+
+            const add_ons = addOnNames.map((name, index) => ({
+              name,
+              product_id: addOnIds[index],
+              quantity: addOnQuantities[index],
+              original_price: addOnOriginalPrices[index],
+              selling_price: addOnSellingPrices[index],
+              image_url: addOnImages[index],
+            }));
+
+            // ---------- Parse variations ----------
+            const variantIds = toArray(row["variations.variant_id"]);
+            const variantSkus = toArray(row["variations.variant_sku"]);
+            const variantNames = toArray(row["variations.variant_name"]);
+            const quantities = toArray(row["variations.quantity_in_bunch"]).map(toNumber);
+            const originalPrices = toArray(row["variations.original_price"]).map(toNumber);
+            const sellingPrices = toArray(row["variations.selling_price"]).map(toNumber);
+            const discounts = toArray(row["variations.discount_percentage"]).map(toNumber);
+            const images = toArray(row["variations.image_url"]);
+
+            const variations = variantIds.map((id, index) => ({
+              variant_id: id,
+              variant_sku: variantSkus[index],
+              variant_name: variantNames[index],
+              quantity_in_bunch: quantities[index],
+              original_price: originalPrices[index],
+              selling_price: sellingPrices[index],
+              discount_percentage: discounts[index],
+              image_url: images[index],
+            }));
+
+            // ---------- Build product ----------
             const product = {
               product_id: row.product_id.trim(),
               slug: row.slug.trim().toLowerCase(),
@@ -250,18 +286,11 @@ export const importProductsFromCSV = async (req, res) => {
                     row["care_and_logistics.shipping_constraints.regional_availability"]
                   ),
                 },
-                add_ons: row["care_and_logistics.add_ons.name"]
-                  ? [{
-                      name: row["care_and_logistics.add_ons.name"],
-                      product_id: row["care_and_logistics.add_ons.product_id"],
-                      quantity: toNumber(row["care_and_logistics.add_ons.quantity"]),
-                      original_price: toNumber(row["care_and_logistics.add_ons.original_price"]),
-                      selling_price: toNumber(row["care_and_logistics.add_ons.selling_price"]),
-                      image_url: row["care_and_logistics.add_ons.image_url"],
-                    }]
-                  : [],
+                add_ons,
               },
 
+              variations,
+              
               availability: {
                 is_active: toBoolean(row["availability.is_active"]) ?? true,
                 is_featured: toBoolean(row["availability.is_featured"]) ?? false,
@@ -292,6 +321,148 @@ export const importProductsFromCSV = async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 };
+
+// ---------- controller ----------
+// export const importProductsFromCSV = async (req, res) => {
+//   try {
+//     if (!req.file) {
+//       return res.status(400).json({ message: "CSV file is required" });
+//     }
+
+//     const filePath = req.file.path;
+//     const rows = [];
+
+//     fs.createReadStream(filePath)
+//       .pipe(csv())
+//       .on("data", (row) => rows.push(row))
+//       .on("end", async () => {
+
+//         const inserted = [];
+//         const failed = [];
+
+//         for (const row of rows) {
+//           try {
+//             // Required fields
+//             if (!row.product_id || !row.slug || !row.name) {
+//               failed.push({ row, reason: "Missing required fields" });
+//               continue;
+//             }
+
+//             // Uniqueness check
+//             if (await Product.exists({ product_id: row.product_id })) {
+//               failed.push({ row, reason: "product_id already exists" });
+//               continue;
+//             }
+
+//             if (await Product.exists({ slug: row.slug })) {
+//               failed.push({ row, reason: "slug already exists" });
+//               continue;
+//             }
+
+//             // ---------- build product ----------
+//             const product = {
+//               product_id: row.product_id.trim(),
+//               slug: row.slug.trim().toLowerCase(),
+//               name: row.name,
+//               sku: row.sku,
+//               quantity: toNumber(row.quantity),
+//               original_price: toNumber(row.original_price),
+//               selling_price: toNumber(row.selling_price),
+//               description: row.description,
+//               short_summary: row.short_summary,
+
+//               categorization: {
+//                 category_id: toNumber(row["categorization.category_id"]),
+//                 category_name: row["categorization.category_name"],
+//                 subcategory_id: toNumber(row["categorization.subcategory_id"]),
+//                 subcategory_name: row["categorization.subcategory_name"],
+//                 festival_tags: toArray(row["categorization.festival_tags"]),
+//                 occasion_tags: toArray(row["categorization.occasion_tags"]),
+//                 type: row["categorization.type"],
+//               },
+
+//               product_attributes: {
+//                 color: row["product_attributes.color"],
+//                 stem_length_cm: toNumber(row["product_attributes.stem_length_cm"]),
+//                 fragrance_level: row["product_attributes.fragrance_level"],
+//                 vase_life_days_min: toNumber(row["product_attributes.vase_life_days_min"]),
+//                 origin: row["product_attributes.origin"],
+//               },
+
+//               media: {
+//                 primary_image_url: row["media.primary_image_url"],
+//                 gallery_images: toArray(row["media.gallery_images"]),
+//               },
+
+//               metrics: {
+//                 average_rating: toNumber(row["metrics.average_rating"]),
+//                 review_count: toNumber(row["metrics.review_count"]),
+//                 times_ordered: toNumber(row["metrics.times_ordered"]),
+//               },
+
+//               customer_reviews: row["customer_reviews.rating"]
+//                 ? [{
+//                     rating: toNumber(row["customer_reviews.rating"]),
+//                     review_date: toDate(row["customer_reviews.review_date"]),
+//                     comment: row["customer_reviews.comment"],
+//                   }]
+//                 : [],
+
+//               care_and_logistics: {
+//                 care_instructions: toArray(row["care_and_logistics.care_instructions"]),
+//                 shipping_constraints: {
+//                   requires_cold_chain: toBoolean(
+//                     row["care_and_logistics.shipping_constraints.requires_cold_chain"]
+//                   ),
+//                   max_delivery_days: toNumber(
+//                     row["care_and_logistics.shipping_constraints.max_delivery_days"]
+//                   ),
+//                   regional_availability: toArray(
+//                     row["care_and_logistics.shipping_constraints.regional_availability"]
+//                   ),
+//                 },
+//                 add_ons: row["care_and_logistics.add_ons.name"]
+//                   ? [{
+//                       name: row["care_and_logistics.add_ons.name"],
+//                       product_id: row["care_and_logistics.add_ons.product_id"],
+//                       quantity: toNumber(row["care_and_logistics.add_ons.quantity"]),
+//                       original_price: toNumber(row["care_and_logistics.add_ons.original_price"]),
+//                       selling_price: toNumber(row["care_and_logistics.add_ons.selling_price"]),
+//                       image_url: row["care_and_logistics.add_ons.image_url"],
+//                     }]
+//                   : [],
+//               },
+
+//               availability: {
+//                 is_active: toBoolean(row["availability.is_active"]) ?? true,
+//                 is_featured: toBoolean(row["availability.is_featured"]) ?? false,
+//                 last_restock_date: toDate(row["availability.last_restock_date"]),
+//               },
+//             };
+
+//             const created = await Product.create(product);
+//             inserted.push(created);
+
+//           } catch (err) {
+//             failed.push({ row, reason: err.message });
+//           }
+//         }
+
+//         fs.unlinkSync(filePath);
+
+//         return res.json({
+//           message: "CSV import completed",
+//           inserted_count: inserted.length,
+//           failed_count: failed.length,
+//           inserted,
+//           failed,
+//         });
+//       });
+
+//   } catch (err) {
+//     return res.status(500).json({ error: err.message });
+//   }
+// };
 // export const importProductsFromCSV = async (req, res) => {
 //   try {
 //     if (!req.file) {
