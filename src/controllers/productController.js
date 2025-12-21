@@ -232,7 +232,9 @@ export const importProductsFromCSV = async (req, res) => {
     const rows = [];
 
     fs.createReadStream(filePath)
-      .pipe(csv())
+      .pipe(csv({
+        mapHeaders: ({ header }) => header.trim() 
+      }))
       .on("data", (row) => rows.push(row))
       .on("end", async () => {
         const inserted = [];
@@ -256,7 +258,7 @@ export const importProductsFromCSV = async (req, res) => {
               failed.push({ row, reason: "slug already exists" });
               continue;
             }
-           
+
             // ---------- Parse add_ons ----------
             const addOnNames = toArray(row["care_and_logistics.add_ons.name"]);
             const addOnIds = toArray(row["care_and_logistics.add_ons.product_id"]);
@@ -304,7 +306,7 @@ export const importProductsFromCSV = async (req, res) => {
 
             // ---------- Build product ----------
 
-   
+
 
             const product = {
               product_id: row.product_id.trim(),
@@ -312,7 +314,7 @@ export const importProductsFromCSV = async (req, res) => {
               name: row.name,
               sku: row.sku,
               quantity: toNumber(row.quantity),
-              costing_price: toNumber(row.costing_price), 
+              costing_price: toNumber(row.costing_price),
               original_price: toNumber(row.original_price),
               selling_price: toNumber(row.selling_price),
               description: row.description,
@@ -326,7 +328,7 @@ export const importProductsFromCSV = async (req, res) => {
                 festival_tags: toArray(row["categorization.festival_tags"]),
                 occasion_tags: toArray(row["categorization.occasion_tags"]),
                 type: row["categorization.type"],
-                relationship: toArray(row["categorization.relationship"]), 
+                relationship: toArray(row["categorization.relationship"]),
               },
 
               product_attributes: {
@@ -416,7 +418,9 @@ export const updateProductsFromCSV = async (req, res) => {
     const rows = [];
 
     fs.createReadStream(filePath)
-      .pipe(csv())
+      .pipe(csv({
+    mapHeaders: ({ header }) => header.trim() 
+  }))
       .on("data", (row) => rows.push(row))
       .on("end", async () => {
         const updated = [];
