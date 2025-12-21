@@ -6,7 +6,8 @@ import {
   updateReview,
   addProduct,
   editProduct,
-  deleteProduct
+  deleteProduct,
+  updateProductsFromCSV
 } from "../controllers/productController.js";
 import auth from "../middlewares/authMiddleware.js";
 import { isAdmin } from "../middlewares/isAdmin.js";
@@ -32,4 +33,11 @@ router.post(
   importProductsFromCSV
 );
 
+router.post(
+  "/update",             
+  authMiddleware,         
+  isAdmin,                
+  upload.single("file"),
+  updateProductsFromCSV   
+);
 export default router;
