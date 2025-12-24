@@ -83,7 +83,7 @@ export const getProducts = async (req, res) => {
     // ---------- Query ----------
     const products = await Product.find(query)
       .select(
-        "product_id name slug sku quantity original_price selling_price short_summary media"
+        "product_id name slug sku quantity original_price selling_price short_summary media categorization"
       )
       .skip(skip)
       .limit(limitNumber);
