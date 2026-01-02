@@ -39,12 +39,18 @@ export const softDeleteAddOn = async (req, res) => {
 // Get all AddOns
 export const getAllAddOns = async (req, res) => {
   try {
-    const addOns = await AddOn.find({ softDelete: false });
+    // Fetch ALL addOns (softDelete true + false)
+    const addOns = await AddOn.find();
+
     res.json(addOns);
   } catch (err) {
-    res.status(500).json({ message: "Error fetching AddOns", error: err.message });
+    res.status(500).json({
+      message: "Error fetching AddOns",
+      error: err.message,
+    });
   }
 };
+
 
 // Get AddOn by title
 export const getAddOnByName = async (req, res) => {
