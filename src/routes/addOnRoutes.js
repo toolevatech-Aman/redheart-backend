@@ -5,7 +5,8 @@ import {
   softDeleteAddOn,
   getAllAddOns,
   getAddOnByName,
-  getAddOnsByCategory
+  getAddOnsByCategory,
+  getAddOnsExceptCategory
 } from "../controllers/addOnController.js";
 import auth from "../middlewares/authMiddleware.js";
 import { isAdmin } from "../middlewares/isAdmin.js";
@@ -28,3 +29,5 @@ router.get("/name/:name", getAddOnByName);
 
 router.get("/category/:category", getAddOnsByCategory);
 export default router;
+
+router.get("/addons/exclude/:category", getAddOnsExceptCategory);

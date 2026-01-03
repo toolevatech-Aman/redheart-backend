@@ -75,3 +75,29 @@ export const getAddOnsByCategory = async (req, res) => {
     res.status(500).json({ message: "Error fetching AddOns by category", error: err.message });
   }
 };
+
+
+export const getAddOnsExceptCategory = async (req, res) => {
+  try {
+    const { category } = req.params;
+
+    const addOns = await AddOn.find({
+      category: { $ne: category }, // exclude this category
+      softDelete: false,
+      addOn: false
+    });
+
+    if (!addOns.length) {
+      return res
+        .status(404)
+        .json({ message: "No AddOns found matching the criteria" });
+    }
+
+    res.json(addOns);
+  } catch (err) {
+    res.status(500).json({
+      message: "Error fetching AddOns excluding category",
+      error: err.message
+    });
+  }
+};
