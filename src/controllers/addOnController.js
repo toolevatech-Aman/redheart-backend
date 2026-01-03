@@ -84,7 +84,7 @@ export const getAddOnsExceptCategory = async (req, res) => {
     const addOns = await AddOn.find({
       category: { $ne: category }, // exclude this category
       softDelete: false,
-      addOn: false
+      addOn: true
     });
 
     if (!addOns.length) {
