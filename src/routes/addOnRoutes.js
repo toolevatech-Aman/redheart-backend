@@ -28,6 +28,7 @@ router.get("/all", auth,isAdmin, getAllAddOns);
 router.get("/name/:name", getAddOnByName);
 
 router.get("/category/:category", getAddOnsByCategory);
-export default router;
+
 
 router.get("/addons/exclude/:category", getAddOnsExceptCategory);
+export default router;
