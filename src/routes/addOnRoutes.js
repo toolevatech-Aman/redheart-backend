@@ -29,6 +29,6 @@ router.get("/name/:name", getAddOnByName);
 
 router.get("/category/:category", getAddOnsByCategory);
 
+router.get("/exclude/:category", getAddOnsExceptCategory);
 
-router.get("/addons/exclude/:category", getAddOnsExceptCategory);
 export default router;

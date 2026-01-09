@@ -10,7 +10,7 @@ import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import addOnRoutes from "./routes/addOnRoutes.js"; 
-
+import userRoutes from "./routes/userRoutes.js";
 const app = express();
 
 // Middlewares
@@ -27,6 +27,7 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/addOn", addOnRoutes);
+app.use("/api/user", userRoutes);
 
 // Connect DB
 connectDB();
