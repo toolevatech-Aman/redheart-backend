@@ -11,6 +11,7 @@ import authRoutes from "./routes/authRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import addOnRoutes from "./routes/addOnRoutes.js"; 
 import userRoutes from "./routes/userRoutes.js";
+import pageContentRoutes from "./routes/pageContentRoutes.js";
 const app = express();
 
 // Middlewares
@@ -28,6 +29,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/addOn", addOnRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/page-content", pageContentRoutes);
 
 // Connect DB
 connectDB();
