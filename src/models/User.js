@@ -1,22 +1,41 @@
 import mongoose from "mongoose";
 const couponSchema = new mongoose.Schema(
   {
-    code: { type: String, required: true },
+    code: {
+      type: String,
+      required: true,
+      unique: true,
+      uppercase: true,
+      trim: true
+    },
+
     discountType: {
       type: String,
       enum: ["percentage", "flat"],
       required: true
     },
-    discountValue: { type: Number, required: true },
-    expiresAt: { type: Date },
-    isUsed: { type: Boolean, default: false },
-    usedAt: { type: Date }
+
+    discountValue: {
+      type: Number,
+      required: true
+    },
+
+    minOrderValue: {
+      type: Number,
+      required: true
+    },
+
+    isUsed: {
+      type: Boolean,
+      default: false
+    }
   },
-  { _id: false }
+  { timestamps: true }
 );
 const addressSchema = new mongoose.Schema(
   {
-    label: { type: String, default: "home" }, // home, office, etc.
+    firstName: { type: String, required: true },
+    lastName: { type: String, required: true },
     street: { type: String, required: true },
     city: { type: String, required: true },
     state: { type: String },
@@ -25,7 +44,7 @@ const addressSchema = new mongoose.Schema(
     phone: { type: String },
     isDefault: { type: Boolean, default: false }
   }
- 
+
 );
 
 

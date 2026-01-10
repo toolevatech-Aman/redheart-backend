@@ -90,6 +90,59 @@ export const sendOtp = async (req, res) => {
 //     res.status(500).json({ error: err.message });
 //   }
 // };
+// export const verifyOtp = async (req, res) => {
+//   try {
+//     const { sessionId, otp, phone } = req.body;
+
+//     if (!sessionId || !otp || !phone) {
+//       return res
+//         .status(400)
+//         .json({ message: "sessionId, otp & phone required" });
+//     }
+
+//     let formattedPhone = phone;
+//     if (/^[6-9]\d{9}$/.test(phone)) formattedPhone = "+91" + phone;
+
+//     const url = `https://2factor.in/API/V1/${process.env.TWOFACTOR_API_KEY}/SMS/VERIFY/${sessionId}/${otp}`;
+//     const response = await axios.get(url);
+
+//     if (response.data.Status !== "Success") {
+//       return res.status(400).json({ message: "OTP verification failed" });
+//     }
+
+//     // FIND OR CREATE USER
+//     let user = await User.findOne({ phone: formattedPhone });
+
+//     if (!user) {
+//       user = await User.create({
+//         userId: uuidv4(),
+//         phone: formattedPhone,
+//         isVerified: true,
+//         role: "user", // default role
+//         tokens: []    // initialize tokens array
+//       });
+//     } else {
+//       user.isVerified = true;
+//     }
+
+//     // Generate token
+//     const token = generateToken(user);
+
+//     // Save token in DB
+//     user.tokens = user.tokens || [];
+//     user.tokens.push({ token, createdAt: new Date() });
+//     await user.save();
+
+//     res.json({
+//       message: "Login Successful",
+//       token,
+//       user
+//     });
+//   } catch (err) {
+//     console.log(err);
+//     res.status(500).json({ error: err.message });
+//   }
+// };
 export const verifyOtp = async (req, res) => {
   try {
     const { sessionId, otp, phone } = req.body;
@@ -114,12 +167,31 @@ export const verifyOtp = async (req, res) => {
     let user = await User.findOne({ phone: formattedPhone });
 
     if (!user) {
+      // default coupons array
+      const defaultCoupons = [
+        {
+          code: "NEW10",
+          discountType: "percentage",
+          discountValue: 10,
+          minOrderValue: 599,
+          isUsed: false
+        },
+        {
+          code: "HAPPY100",
+          discountType: "flat",
+          discountValue: 100,
+          minOrderValue: 1000,
+          isUsed: false
+        }
+      ];
+
       user = await User.create({
         userId: uuidv4(),
         phone: formattedPhone,
         isVerified: true,
-        role: "user", // default role
-        tokens: []    // initialize tokens array
+        role: "user",
+        tokens: [],          // initialize tokens array
+        coupons: defaultCoupons // add default coupons
       });
     } else {
       user.isVerified = true;
