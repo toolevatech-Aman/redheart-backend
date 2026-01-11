@@ -12,6 +12,7 @@ import productRoutes from "./routes/productRoutes.js";
 import addOnRoutes from "./routes/addOnRoutes.js"; 
 import userRoutes from "./routes/userRoutes.js";
 import pageContentRoutes from "./routes/pageContentRoutes.js";
+import orderRoutes from './routes/orderRoutes.js';
 const app = express();
 
 // Middlewares
@@ -30,6 +31,8 @@ app.use("/api/products", productRoutes);
 app.use("/api/addOn", addOnRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/page-content", pageContentRoutes);
+app.use('/api/orders', orderRoutes);
+
 
 // Connect DB
 connectDB();
