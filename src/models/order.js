@@ -32,7 +32,7 @@ const cartItemSchema = new mongoose.Schema({
 
 const orderSchema = new mongoose.Schema({
   orderId: { type: String, unique: true },
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // reference to user
+  userId: { type: String, required: true }, // store UUID string// reference to user
   shippingAddress: addressSchema,
   billingAddress: {
     firstName: String,
