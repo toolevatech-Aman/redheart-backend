@@ -4,7 +4,8 @@ import {
   getAllOrders,
   getOrdersByUser,
   getOrderById,
-  updateOrderStatus
+  updateOrderStatus,
+  verifyPayment
 } from '../controllers/orderController.js';
 import auth from '../middlewares/authMiddleware.js';
 import { isAdmin } from '../middlewares/isAdmin.js';
@@ -17,7 +18,7 @@ const router = express.Router();
 
 // Create order (logged-in user)
 router.post('/', auth, createOrder);
-
+router.post("/verify-payment", auth, verifyPayment);
 // Get orders for logged-in user
 // Old route: router.get('/user/:userId', auth, getOrdersByUser);
 router.get('/user', auth, getOrdersByUser); // no need for :userId anymore

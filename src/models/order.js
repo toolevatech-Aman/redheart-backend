@@ -46,6 +46,14 @@ const orderSchema = new mongoose.Schema({
   },
   cartItems: [cartItemSchema],
   paymentMode: String,
+  paymentStatus: {
+    type: String,
+    enum: ['PENDING', 'PAID', 'FAILED', 'COD'],
+    default: 'PENDING'
+  },
+
+  razorpayOrderId: { type: String },
+  razorpayPaymentId: { type: String },
   deliveryDate: Date,
   deliverySlot: String,
   shippingCharges: Number,
@@ -54,12 +62,12 @@ const orderSchema = new mongoose.Schema({
   totalShipmentPrice: Number,
   totalProductPrice: Number,
   totalPrice: Number,
-  orderNote: { type: String, default: "" } ,
+  orderNote: { type: String, default: "" },
   orderStatus: { type: String, default: 'Pending' } // Pending, Processing, Shipped, Delivered, Cancelled
 }, { timestamps: true });
 
 // Auto-generate orderId before save
-orderSchema.pre('save', async function(next) {
+orderSchema.pre('save', async function (next) {
   if (!this.orderId) {
     const random = Math.floor(1000 + Math.random() * 9000);
     this.orderId = `ORDRH${Date.now()}${random}`;
