@@ -4,7 +4,7 @@ import ConfidentialKey from "../models/confidentialKeys.js";
 import { getRazorpayInstance } from "../services/razorpay.js";
 import { createHmac } from "crypto";
 
-const QUESTION_AMOUNT_PAISE = 49900; // 499 INR
+const QUESTION_AMOUNT_PAISE = 69900; // 699 INR
 
 // POST - Add questions (array of { question, type })
 export const addQuestions = async (req, res) => {
@@ -80,7 +80,7 @@ export const deleteQuestion = async (req, res) => {
   }
 };
 
-// POST - Submit answers (array of { question, answer }) -> create payment order for 499
+// POST - Submit answers (array of { question, answer }) -> create payment order for 699
 export const submitAnswers = async (req, res) => {
   try {
     const answers = req.body;
@@ -134,7 +134,7 @@ export const submitAnswers = async (req, res) => {
         submissionId: submission._id,
         razorpayOrderId: razorpayOrder.id,
         amount: QUESTION_AMOUNT_PAISE,
-        amountINR: 499,
+        amountINR: 699,
         key_id,
       },
     });
