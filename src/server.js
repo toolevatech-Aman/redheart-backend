@@ -14,6 +14,7 @@ import userRoutes from "./routes/userRoutes.js";
 import pageContentRoutes from "./routes/pageContentRoutes.js";
 import orderRoutes from './routes/orderRoutes.js';
 import questionRoutes from './routes/questionRoutes.js';
+import bulkRoutes from './routes/bulkRoutes.js';
 const app = express();
 
 // Middlewares
@@ -34,6 +35,7 @@ app.use("/api/user", userRoutes);
 app.use("/api/page-content", pageContentRoutes);
 app.use('/api/orders', orderRoutes);
 app.use("/api/questions", questionRoutes);
+app.use("/api/bulk",     bulkRoutes);
 
 
 // Connect DB

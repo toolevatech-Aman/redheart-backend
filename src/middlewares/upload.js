@@ -18,4 +18,19 @@ const storage = multer.diskStorage({
   },
 });
 
-export const upload = multer({ storage });
+const fileFilter = (req, file, cb) => {
+  const allowed = [
+    "text/csv",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/octet-stream",
+  ];
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (allowed.includes(file.mimetype) || [".csv", ".xlsx", ".xls"].includes(ext)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Only .csv and .xlsx files are allowed."), false);
+  }
+};
+
+export const upload = multer({ storage, fileFilter, limits: { fileSize: 20 * 1024 * 1024 } }); // 20 MB
