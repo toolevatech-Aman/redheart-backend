@@ -16,6 +16,7 @@ import orderRoutes from './routes/orderRoutes.js';
 import questionRoutes from './routes/questionRoutes.js';
 import bulkRoutes from './routes/bulkRoutes.js';
 import cityPageRoutes from './routes/cityPageRoutes.js';
+import { citiesSitemap } from './controllers/sitemapController.js';
 const app = express();
 
 // Middlewares
@@ -38,6 +39,9 @@ app.use('/api/orders', orderRoutes);
 app.use("/api/questions", questionRoutes);
 app.use("/api/bulk",     bulkRoutes);
 app.use("/api/city",    cityPageRoutes);
+
+// ── Sitemaps (public, no /api prefix) ────────────────────────────────────────
+app.get("/sitemap_cities.xml", citiesSitemap);
 
 
 // Connect DB
