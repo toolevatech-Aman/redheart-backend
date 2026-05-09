@@ -34,8 +34,9 @@ const CATEGORY_CONFIG = {
   Flowers: {
     urlBase: "/florist-near-me",
     metaTitle:        (proper) => `Flower Delivery in ${proper} | Same Day Fresh Flower Delivery from RedHeart`,
-    metaDescription:  (slug)   => `Shop fresh flowers online in ${slug}: Get same-day & midnight delivery in ${slug}! Your trusted local flower shop in ${slug} - RedHeart. Free Shipping!`,
+    metaDescription:  (proper) => `Shop fresh flowers online in ${proper}: Get same-day & midnight delivery in ${proper}! Your trusted local flower shop in ${proper} - RedHeart. Free Shipping!`,
     h1:               (proper) => `Flower Delivery in ${proper}`,
+    metaKeyword:      (proper) => `flower delivery in ${proper}, florist in ${proper}, send flowers to ${proper}, fresh flowers ${proper}, online flower delivery ${proper}, flower shop ${proper}, flowers near me ${proper}, same day flower delivery ${proper}`,
     breadcrumb:       (proper, slug) => [
       { label: "Home",                              url: "/" },
       { label: "Flowers",                           url: "/flowers" },
@@ -46,8 +47,9 @@ const CATEGORY_CONFIG = {
   Cakes: {
     urlBase: "/order-cake-online",
     metaTitle:        (proper) => `Cake Delivery in ${proper} | Same Day Cake Delivery from RedHeart | Upto 20% off`,
-    metaDescription:  (slug)   => `Shop fresh cakes online in ${slug} from RedHeart. Enjoy free same-day & midnight delivery in ${slug} for birthdays, anniversaries & more. Free shipping!`,
+    metaDescription:  (proper) => `Shop fresh cakes online in ${proper} from RedHeart. Enjoy free same-day & midnight delivery in ${proper} for birthdays, anniversaries & more. Free shipping!`,
     h1:               (proper) => `Cake Delivery in ${proper}`,
+    metaKeyword:      (proper) => `cake delivery in ${proper}, order cake online ${proper}, birthday cake ${proper}, online cake delivery ${proper}, cake shop ${proper}, best cake ${proper}, same day cake delivery ${proper}`,
     breadcrumb:       (proper, slug) => [
       { label: "Home",                            url: "/" },
       { label: "Cakes",                           url: "/cakes" },
@@ -58,8 +60,9 @@ const CATEGORY_CONFIG = {
   Plants: {
     urlBase: "/plants-online",
     metaTitle:        (proper) => `Plants Online in ${proper} | Same Day Live Plants Delivery from RedHeart`,
-    metaDescription:  (slug)   => `Order & buy plants online in ${slug} at RedHeart - indoor, outdoor & flowering plants. Fast plant delivery in ${slug}. Same-day delivery. Order Now!`,
+    metaDescription:  (proper) => `Order & buy plants online in ${proper} at RedHeart - indoor, outdoor & flowering plants. Fast plant delivery in ${proper}. Same-day delivery. Order Now!`,
     h1:               (proper) => `Plants Online in ${proper}`,
+    metaKeyword:      (proper) => `plants online ${proper}, buy plants ${proper}, plant delivery ${proper}, indoor plants ${proper}, online nursery ${proper}, plants near me ${proper}, same day plant delivery ${proper}`,
     breadcrumb:       (proper, slug) => [
       { label: "Home",                  url: "/" },
       { label: "Plants",                url: "/plants" },
@@ -82,10 +85,10 @@ function generateCityData(category, rawCity) {
     slug,
     url,
     metaTitle:       cfg.metaTitle(proper),
-    metaDescription: cfg.metaDescription(slug),
+    metaDescription: cfg.metaDescription(proper),
     h1:              cfg.h1(proper),
     canonicalUrl:    `https://www.redheart.in${url}`,
-    metaKeyword:     "",
+    metaKeyword:     cfg.metaKeyword(proper),
     breadcrumb:      cfg.breadcrumb(proper, slug),
     footerContent:   "",
     faqs:            [],
@@ -218,6 +221,48 @@ export async function deleteCity(req, res) {
     return res.json({ message: "Deleted successfully" });
   } catch (err) {
     console.error("deleteCity error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
+
+/**
+ * POST /api/city/cities/regenerate/:category
+ * Admin route — re-applies current templates to all cities for a given category.
+ * Only updates metaKeyword, metaTitle, metaDescription, h1, breadcrumb, canonicalUrl
+ * so that manually customised footerContent and faqs are preserved.
+ */
+export async function regenerateCities(req, res) {
+  try {
+    const { category } = req.params;
+    if (!CATEGORY_CONFIG[category]) {
+      return res.status(400).json({ message: "Invalid category" });
+    }
+
+    const cities = await CityPage.find({ category });
+    let updated = 0;
+
+    for (const city of cities) {
+      const cfg    = CATEGORY_CONFIG[category];
+      const proper = city.cityName;
+      const slug   = city.slug;
+      const url    = city.url;
+
+      await CityPage.findByIdAndUpdate(city._id, {
+        $set: {
+          metaTitle:       cfg.metaTitle(proper),
+          metaDescription: cfg.metaDescription(proper),
+          h1:              cfg.h1(proper),
+          metaKeyword:     cfg.metaKeyword(proper),
+          canonicalUrl:    `https://www.redheart.in${url}`,
+          breadcrumb:      cfg.breadcrumb(proper, slug),
+        },
+      });
+      updated++;
+    }
+
+    return res.json({ message: `Regenerated ${updated} cities for ${category}.`, updated });
+  } catch (err) {
+    console.error("regenerateCities error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 }

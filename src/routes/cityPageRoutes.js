@@ -8,17 +8,19 @@ import {
   updateCity,
   deleteCity,
   getCityPage,
+  regenerateCities,
 } from "../controllers/cityPageController.js";
 
 const router = express.Router();
 const auth   = [authMiddleware, isAdmin];
 
 // ── Admin routes (auth + isAdmin) ─────────────────────────────────────────────
-router.get("/cities/:category",  ...auth, getCities);
-router.post("/cities",           ...auth, addCity);
-router.post("/cities/bulk",      ...auth, addCitiesBulk);
-router.put("/cities/:id",        ...auth, updateCity);
-router.delete("/cities/:id",     ...auth, deleteCity);
+router.get("/cities/:category",              ...auth, getCities);
+router.post("/cities",                       ...auth, addCity);
+router.post("/cities/bulk",                  ...auth, addCitiesBulk);
+router.post("/cities/regenerate/:category",  ...auth, regenerateCities);
+router.put("/cities/:id",                    ...auth, updateCity);
+router.delete("/cities/:id",                 ...auth, deleteCity);
 
 // ── Public route ──────────────────────────────────────────────────────────────
 router.get("/page/:category/:slug", getCityPage);

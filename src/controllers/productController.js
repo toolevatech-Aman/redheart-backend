@@ -43,9 +43,10 @@ export const getProducts = async (req, res) => {
       festival_tags,
       occasion_tags,
       type,
-      relationship,        // ✅ NEW
-      page = 1,             // ✅ pagination
-      limit = 10            // ✅ pagination
+      relationship,
+      available_cities,   // city filter: shows "India" products + exact city products
+      page  = 1,
+      limit = 10
     } = req.query;
 
     let query = {};
@@ -73,7 +74,16 @@ export const getProducts = async (req, res) => {
       query["categorization.occasion_tags"] = { $in: occasion_tags.split(",") };
 
     if (relationship)
-      query["categorization.relationship"] = { $in: relationship.split(",") }; // ✅ NEW
+      query["categorization.relationship"] = { $in: relationship.split(",") };
+
+    // City page filter: show "India" (global) products + exact-city products
+    if (available_cities) {
+      const cityName = available_cities.trim();
+      query.$or = [
+        { "product_attributes.available_cities": "India" },
+        { "product_attributes.available_cities": { $regex: new RegExp(`^${cityName}$`, "i") } },
+      ];
+    }
 
     // ---------- Pagination ----------
     const pageNumber = Number(page);
