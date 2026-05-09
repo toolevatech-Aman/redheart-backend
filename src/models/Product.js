@@ -31,6 +31,7 @@ const productSchema = new mongoose.Schema(
       fragrance_level: { type: String },
       vase_life_days_min: { type: Number },
       origin: { type: String },
+      available_cities: { type: String, required: true, default: "India" },
     },
 
     media: {

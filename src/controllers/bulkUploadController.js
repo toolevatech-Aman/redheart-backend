@@ -86,12 +86,13 @@ const mapRowToProduct = (row, category) => {
     },
 
     product_attributes: {
-      color:           get("product_attributes.color")           || undefined,
-      product_content: parseArray(get("product_attributes.product_content")),
-      stem_length_cm:  parseNumber(get("product_attributes.stem_length_cm")),
-      fragrance_level: get("product_attributes.fragrance_level") || undefined,
+      color:            get("product_attributes.color")            || undefined,
+      product_content:  parseArray(get("product_attributes.product_content")),
+      stem_length_cm:   parseNumber(get("product_attributes.stem_length_cm")),
+      fragrance_level:  get("product_attributes.fragrance_level") || undefined,
       vase_life_days_min: parseNumber(get("product_attributes.vase_life_days_min")),
-      origin:          get("product_attributes.origin")          || undefined,
+      origin:           get("product_attributes.origin")          || undefined,
+      available_cities: get("product_attributes.available_cities") || "India",
     },
 
     media: {
