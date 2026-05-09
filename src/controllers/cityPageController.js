@@ -448,6 +448,7 @@ export async function regenerateCities(req, res) {
           metaKeyword:     cfg.metaKeyword(proper),
           canonicalUrl:    `https://www.redheart.in${url}`,
           breadcrumb:      cfg.breadcrumb(proper, slug),
+          faqs:            generateFaqs(category, proper),
         },
       });
       updated++;
