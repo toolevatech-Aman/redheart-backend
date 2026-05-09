@@ -3,6 +3,7 @@ import authMiddleware from "../middlewares/authMiddleware.js";
 import { isAdmin } from "../middlewares/isAdmin.js";
 import {
   getCities,
+  getCitiesPublic,
   addCity,
   addCitiesBulk,
   updateCity,
@@ -22,7 +23,8 @@ router.post("/cities/regenerate/:category",  ...auth, regenerateCities);
 router.put("/cities/:id",                    ...auth, updateCity);
 router.delete("/cities/:id",                 ...auth, deleteCity);
 
-// ── Public route ──────────────────────────────────────────────────────────────
-router.get("/page/:category/:slug", getCityPage);
+// ── Public routes ─────────────────────────────────────────────────────────────
+router.get("/page/:category/:slug",   getCityPage);
+router.get("/public/:category",       getCitiesPublic);
 
 export default router;

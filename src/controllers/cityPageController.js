@@ -292,8 +292,30 @@ function generateCityData(category, rawCity) {
 // ── Controller functions ──────────────────────────────────────────────────────
 
 /**
+ * GET /api/city/public/:category
+ * Public — returns cityName + url for all active cities in a category.
+ * Used by the /delivery-cities page (no auth required).
+ */
+export async function getCitiesPublic(req, res) {
+  try {
+    const { category } = req.params;
+    if (!CATEGORY_CONFIG[category]) {
+      return res.status(400).json({ message: "Invalid category" });
+    }
+    const cities = await CityPage.find({ category, isActive: true })
+      .select("cityName url")
+      .sort({ cityName: 1 })
+      .lean();
+    return res.json(cities);
+  } catch (err) {
+    console.error("getCitiesPublic error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
+
+/**
  * GET /api/city/cities/:category
- * Returns all city pages for a given category, sorted by cityName.
+ * Admin — returns all city pages for a given category, sorted by cityName.
  */
 export async function getCities(req, res) {
   try {
