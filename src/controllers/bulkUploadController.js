@@ -1,7 +1,12 @@
 // bulkUploadController.js
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import XLSX from "xlsx";
+
+// ESM-safe __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
 import csv from "csv-parser";
 import slugify from "slugify";
 import { v4 as uuidv4 } from "uuid";
@@ -297,10 +302,11 @@ export const downloadErrorReport = async (req, res) => {
 // ── Download sample template ──────────────────────────────────────────────────
 export const downloadTemplate = async (req, res) => {
   const { category } = req.params;
-  const templatePath = path.resolve(`src/templates/${category.toLowerCase()}_upload_template.xlsx`);
+  // __dirname = .../src/controllers — go up one level to src/templates
+  const templatePath = path.join(__dirname, "..", "templates", `${category.toLowerCase()}_upload_template.xlsx`);
 
   if (!fs.existsSync(templatePath)) {
-    return res.status(404).json({ error: `Template for ${category} not found.` });
+    return res.status(404).json({ error: `Template for ${category} not found. Path: ${templatePath}` });
   }
 
   res.setHeader("Content-Disposition", `attachment; filename="${category.toLowerCase()}_upload_template.xlsx"`);
