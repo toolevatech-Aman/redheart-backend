@@ -11,6 +11,6 @@ const router = express.Router();
 router.get("/",           getAllPages);
 router.post("/seed",      seedPages);
 router.put("/:id",        updatePage);
-router.get("/page/*",     getPageByKey);  // /category-seo/page/flowers/roses
+router.get(/^\/page\/(.+)$/, getPageByKey);  // /category-seo/page/flowers/roses
 
 export default router;
