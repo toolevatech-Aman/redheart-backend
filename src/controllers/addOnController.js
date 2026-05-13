@@ -3,8 +3,8 @@ import AddOn from "../models/addOn.js";
 // Create new AddOn
 export const createAddOn = async (req, res) => {
   try {
-    const { image, category, name, costPrice, sellingPrice, originalPrice, addOn } = req.body;
-    const newAddOn = new AddOn({ image, category, name, costPrice, sellingPrice, originalPrice, addOn });
+    const { image, category, categories, name, costPrice, sellingPrice, originalPrice, addOn, isBestSeller } = req.body;
+    const newAddOn = new AddOn({ image, category, categories, name, costPrice, sellingPrice, originalPrice, addOn, isBestSeller });
     await newAddOn.save();
     res.status(201).json({ message: "AddOn created successfully", data: newAddOn });
   } catch (err) {
