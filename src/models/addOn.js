@@ -12,6 +12,7 @@ const addOnSchema = new mongoose.Schema(
     softDelete: { type: Boolean, default: false },
     addOn: { type: Boolean, default: true },
     isBestSeller: { type: Boolean, default: false },
+    isPopular: { type: Boolean, default: false },
     productId: { type: String, unique: true, default: () => `ADDON-${Date.now()}` },
   },
   { timestamps: true }
