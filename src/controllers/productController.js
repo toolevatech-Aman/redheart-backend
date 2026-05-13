@@ -130,6 +130,26 @@ export const getProductById = async (req, res) => {
   }
 };
 
+// Get single product by URL slug (format: {productSlug}-{sku}, e.g. pure-ivory-calm-white-lily-glass-vase-200271fl)
+// Extracts the SKU from the last hyphen-segment and does a case-insensitive lookup
+export const getProductBySlug = async (req, res) => {
+  try {
+    const { slug } = req.params; // e.g. "pure-ivory-calm-white-lily-glass-vase-200271fl"
+
+    // The SKU is always the last hyphen-separated segment (SKUs have no hyphens)
+    const parts = slug.split('-');
+    const skuPart = parts[parts.length - 1]; // e.g. "200271fl"
+
+    const product = await Product.findOne({ sku: new RegExp(`^${skuPart}$`, 'i') }).select(
+      "-costing_price -care_and_logistics.add_ons.costing_price -variations.costing_price"
+    );
+    if (!product) return res.status(404).json({ message: "Product not found" });
+    res.json(product);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // Update review for a product
 export const updateReview = async (req, res) => {
   try {

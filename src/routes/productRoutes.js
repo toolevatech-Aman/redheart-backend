@@ -3,6 +3,7 @@ import express from "express";
 import {
   getProducts,
   getProductById,
+  getProductBySlug,
   updateReview,
   addProduct,
   editProduct,
@@ -17,9 +18,10 @@ import authMiddleware from "../middlewares/authMiddleware.js";
 const router = express.Router();
 
 // Public APIs
-router.get("/", getProducts);                // Search/filter products
-router.get("/:product_id", getProductById); // Full product details
-router.post("/:product_id/review", updateReview); // Add review
+router.get("/", getProducts);                        // Search/filter products
+router.get("/slug/:slug", getProductBySlug);         // Full product details by slug (SEO)
+router.get("/:product_id", getProductById);          // Full product details by product_id
+router.post("/:product_id/review", updateReview);    // Add review
 
 // Admin APIs
 router.post("/", auth, isAdmin, addProduct);
