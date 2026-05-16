@@ -57,8 +57,17 @@ const userSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
-      required: true,
-      unique: true
+      default: null,
+      sparse: true,
+    },
+    googleId: {
+      type: String,
+      default: null,
+      sparse: true,
+    },
+    avatar: {
+      type: String,
+      default: null,
     },
     name: {
       type: String,
