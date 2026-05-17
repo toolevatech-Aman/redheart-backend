@@ -4,13 +4,14 @@ import User from "../models/User.js";
 
 export const updateProfile = async (req, res) => {
   try {
-    const { name, email, dateOfBirth, addresses } = req.body;
+    const { name, email, phone, dateOfBirth, addresses } = req.body;
 
     // Build update object dynamically
     const updateFields = {};
 
     if (name !== undefined) updateFields.name = name;
     if (email !== undefined) updateFields.email = email;
+    if (phone !== undefined) updateFields.phone = phone;
     if (dateOfBirth !== undefined) updateFields.dateOfBirth = dateOfBirth;
 
     const user = await User.findOne({ userId: req.user.userId });
@@ -33,17 +34,20 @@ export const updateProfile = async (req, res) => {
       });
     }
 
-    // Apply other fields
-    if (Object.keys(updateFields).length > 0) {
-      Object.assign(user, updateFields);
+    // Apply scalar fields directly and mark modified so Mongoose saves them.
+    // Object.assign alone can silently skip dirty-tracking for null→value changes.
+    for (const [k, v] of Object.entries(updateFields)) {
+      user[k] = v;
+      user.markModified(k);
     }
 
-    const updatedUser = await user.save(); // triggers validation
+    const updatedUser = await user.save();
 
     res.status(200).json({
       success: true,
       message: "Profile updated successfully",
-      data: updatedUser.toObject({ getters: true, versionKey: false })
+      user: updatedUser.toObject({ getters: true, versionKey: false }),
+      data: updatedUser.toObject({ getters: true, versionKey: false }),
     });
 
   } catch (error) {
