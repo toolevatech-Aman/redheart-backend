@@ -34,17 +34,17 @@ const couponSchema = new mongoose.Schema(
 );
 const addressSchema = new mongoose.Schema(
   {
-    firstName: { type: String, required: true },
-    lastName: { type: String, required: true },
-    street: { type: String, required: true },
-    city: { type: String, required: true },
-    state: { type: String },
-    postalCode: { type: String },
-    country: { type: String, default: "India" },
-    phone: { type: String },
-    isDefault: { type: Boolean, default: false }
+    firstName:   { type: String, required: true },
+    lastName:    { type: String, default: "" },          // optional
+    street:      { type: String, required: true },
+    city:        { type: String, required: true },
+    state:       { type: String, default: "" },
+    postalCode:  { type: String, default: "" },
+    country:     { type: String, default: "India" },
+    phone:       { type: String, default: "" },
+    label:       { type: String, default: "home" },      // home | work | other
+    isDefault:   { type: Boolean, default: false },
   }
-
 );
 
 
