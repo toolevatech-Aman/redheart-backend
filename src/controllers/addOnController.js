@@ -69,8 +69,7 @@ export const getAddOnsByCategory = async (req, res) => {
   try {
     const { category } = req.params;
     const addOns = await AddOn.find({ category: category, softDelete: false });
-    if (!addOns.length) return res.status(404).json({ message: "No AddOns found in this category" });
-    res.json(addOns);
+    res.json(addOns); // return [] if empty — never 404
   } catch (err) {
     res.status(500).json({ message: "Error fetching AddOns by category", error: err.message });
   }
