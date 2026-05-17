@@ -31,6 +31,11 @@ app.get("/", (req, res) => {
   res.send("API Working 🚀");
 });
 
+// Block search engines from indexing the backend API
+app.get("/robots.txt", (req, res) => {
+  res.type("text/plain").send("User-agent: *\nDisallow: /");
+});
+
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/addOn", addOnRoutes);
