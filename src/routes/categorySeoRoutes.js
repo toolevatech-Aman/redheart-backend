@@ -1,6 +1,7 @@
 import express from "express";
 import {
   getAllPages,
+  getAllCategorySeoPaths,
   getPageByKey,
   updatePage,
   seedPages,
@@ -9,6 +10,7 @@ import {
 const router = express.Router();
 
 router.get("/",           getAllPages);
+router.get("/all-slugs",  getAllCategorySeoPaths);  // Lightweight list for sitemap
 router.post("/seed",      seedPages);
 router.put("/:id",        updatePage);
 router.get(/^\/page\/(.+)$/, getPageByKey);  // /category-seo/page/flowers/roses

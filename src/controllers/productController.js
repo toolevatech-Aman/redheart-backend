@@ -116,6 +116,18 @@ export const getProducts = async (req, res) => {
 
 
 // Get single product by product_id
+// GET /products/all-slugs — lightweight list for sitemap generation
+export const getAllProductSlugs = async (req, res) => {
+  try {
+    const products = await Product.find()
+      .select("slug categorization.category_name sku product_id updatedAt")
+      .lean();
+    res.json(products);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 export const getProductById = async (req, res) => {
   try {
     const { product_id } = req.params;

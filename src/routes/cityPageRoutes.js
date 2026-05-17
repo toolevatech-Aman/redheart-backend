@@ -4,6 +4,7 @@ import { isAdmin } from "../middlewares/isAdmin.js";
 import {
   getCities,
   getCitiesPublic,
+  getAllCitySlugs,
   addCity,
   addCitiesBulk,
   updateCity,
@@ -24,6 +25,7 @@ router.put("/cities/:id",                    ...auth, updateCity);
 router.delete("/cities/:id",                 ...auth, deleteCity);
 
 // ── Public routes ─────────────────────────────────────────────────────────────
+router.get("/all-slugs",              getAllCitySlugs);
 router.get("/page/:category/:slug",   getCityPage);
 router.get("/public/:category",       getCitiesPublic);
 

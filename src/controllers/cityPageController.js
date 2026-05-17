@@ -487,6 +487,19 @@ export async function regenerateCities(req, res) {
  * GET /api/city/page/:category/:slug
  * Public route — returns active city page for frontend rendering.
  */
+// GET /city/all-slugs — lightweight list for sitemap generation
+export async function getAllCitySlugs(req, res) {
+  try {
+    const cities = await CityPage.find({ isActive: true })
+      .select("url updatedAt")
+      .lean();
+    res.json(cities);
+  } catch (err) {
+    console.error("getAllCitySlugs error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+}
+
 export async function getCityPage(req, res) {
   try {
     const { category, slug } = req.params;

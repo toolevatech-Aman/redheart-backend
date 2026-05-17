@@ -1,5 +1,15 @@
 import CategorySeoPage from "../models/CategorySeoPage.js";
 
+// GET /category-seo/all-slugs — lightweight list for sitemap generation
+export const getAllCategorySeoPaths = async (req, res) => {
+  try {
+    const pages = await CategorySeoPage.find().select("url updatedAt").lean();
+    res.json(pages);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // GET all pages
 export const getAllPages = async (req, res) => {
   try {
