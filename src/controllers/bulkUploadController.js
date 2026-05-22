@@ -246,6 +246,23 @@ export const confirmImport = async (req, res) => {
     job.validRows      = [];
     await job.save();
 
+    // Flush Next.js ISR cache so new products appear on the live site immediately
+    try {
+      const revalidateUrl    = process.env.NEXTJS_SITE_URL
+        ? `${process.env.NEXTJS_SITE_URL}/api/revalidate`
+        : "https://www.redheart.in/api/revalidate";
+      const revalidateSecret = process.env.REVALIDATE_SECRET;
+      if (revalidateSecret) {
+        await fetch(revalidateUrl, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json", "x-revalidate-secret": revalidateSecret },
+          body:    JSON.stringify({ tag: "products" }),
+        });
+      }
+    } catch (_) {
+      // Non-fatal — products are saved; cache will auto-refresh within 6 hours
+    }
+
     return res.json({
       message:  "Import completed.",
       inserted, updated, failed,
