@@ -21,7 +21,6 @@ const cityPageSchema = new mongoose.Schema(
     category: {
       type: String,
       required: true,
-      enum: ["Flowers", "Cakes", "Plants"],
     },
     cityName:         { type: String, required: true },
     slug:             { type: String, required: true },

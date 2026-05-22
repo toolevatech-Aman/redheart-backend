@@ -17,6 +17,7 @@ import questionRoutes from './routes/questionRoutes.js';
 import bulkRoutes from './routes/bulkRoutes.js';
 import cityPageRoutes from './routes/cityPageRoutes.js';
 import categorySeoRoutes from './routes/categorySeoRoutes.js';
+import categoryConfigRoutes from './routes/categoryConfigRoutes.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
 const app = express();
 
@@ -52,6 +53,7 @@ app.use("/api/questions", questionRoutes);
 app.use("/api/bulk",     bulkRoutes);
 app.use("/api/city",         cityPageRoutes);
 app.use("/api/category-seo", categorySeoRoutes);
+app.use("/api/category-config", categoryConfigRoutes);
 
 // ── Sitemaps (public, no /api prefix) ────────────────────────────────────────
 app.get("/sitemap_cities.xml", citiesSitemap);
