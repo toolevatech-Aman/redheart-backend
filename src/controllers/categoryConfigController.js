@@ -2,16 +2,9 @@
 import XLSX from "xlsx";
 import CategoryConfig from "../models/CategoryConfig.js";
 import CityPage from "../models/CityPage.js";
+import ALL_INDIAN_CITIES from "../data/indianCities.js";
 
-// ── Default cities list ───────────────────────────────────────────────────────
-const DEFAULT_CITIES = [
-  "Delhi", "Mumbai", "Bangalore", "Hyderabad", "Chennai",
-  "Kolkata", "Pune", "Ahmedabad", "Jaipur", "Surat",
-  "Lucknow", "Kanpur", "Nagpur", "Patna", "Indore",
-  "Thane", "Bhopal", "Visakhapatnam", "Vadodara", "Firozabad",
-  "Ludhiana", "Agra", "Nashik", "Faridabad", "Meerut",
-  "Rajkot", "Varanasi", "Srinagar", "Aurangabad", "Dhanbad",
-];
+const DEFAULT_CITIES = ALL_INDIAN_CITIES;
 
 // ── Slug helper ───────────────────────────────────────────────────────────────
 function toSlug(city) {
