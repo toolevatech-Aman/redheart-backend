@@ -62,13 +62,10 @@ app.get("/sitemap_cities.xml", citiesSitemap);
 // Connect DB
 connectDB();
 
-// AWS Elastic Beanstalk / local — start listening
-if (!process.env.VERCEL) {
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-}
+// Port for Beanstalk
+const PORT = process.env.PORT || 5000;
 
-// Vercel serverless export
-export default app;
+// Start server
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
