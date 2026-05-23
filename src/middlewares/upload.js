@@ -2,12 +2,11 @@ import multer from "multer";
 import fs from "fs";
 import path from "path";
 
-// Use /tmp on Vercel (read-only FS), local uploads/ dir elsewhere
-const uploadDir = process.env.VERCEL ? "/tmp/uploads" : "uploads";
+const uploadDir = "uploads";
 
 // Create uploads folder if not exists
 if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+  fs.mkdirSync(uploadDir);
 }
 
 const storage = multer.diskStorage({
