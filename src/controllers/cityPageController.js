@@ -409,7 +409,7 @@ export async function addCitiesBulk(req, res) {
 export async function updateCity(req, res) {
   try {
     const { id } = req.params;
-    const allowed = ["metaTitle", "metaDescription", "h1", "canonicalUrl", "metaKeyword", "footerContent", "faqs"];
+    const allowed = ["metaTitle", "metaDescription", "h1", "canonicalUrl", "metaKeyword", "footerContent", "faqs", "pinnedProducts"];
     const update  = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) update[key] = req.body[key];

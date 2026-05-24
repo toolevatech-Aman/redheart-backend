@@ -16,6 +16,16 @@ const faqSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const pinnedProductSchema = new mongoose.Schema(
+  {
+    productId: { type: String, required: true },
+    position:  { type: Number, required: true },
+    name:      { type: String, default: "" },
+    image:     { type: String, default: "" },
+  },
+  { _id: false }
+);
+
 const cityPageSchema = new mongoose.Schema(
   {
     category: {
@@ -33,6 +43,7 @@ const cityPageSchema = new mongoose.Schema(
     breadcrumb:       { type: [breadcrumbSchema], default: [] },
     footerContent:    { type: String, default: "" },
     faqs:             { type: [faqSchema], default: [] },
+    pinnedProducts:   { type: [pinnedProductSchema], default: [] },
     isActive:         { type: Boolean, default: true },
   },
   { timestamps: true }

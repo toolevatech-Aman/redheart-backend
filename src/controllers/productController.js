@@ -164,11 +164,26 @@ export const getProductBySlug = async (req, res) => {
 };
 
 // GET /products/for-page?pageKey=flowers/birthday
+// GET /products/for-page?cityCategory=Flowers&cityName=Bangalore  (city page variant)
 // Returns ALL products that appear on a given frontend page (used by admin sequencer)
 export const getProductsForPage = async (req, res) => {
   try {
-    const { pageKey } = req.query;
-    if (!pageKey) return res.status(400).json({ error: "pageKey required" });
+    const { pageKey, cityCategory, cityName } = req.query;
+
+    // ── City page variant ────────────────────────────────────────────────────
+    if (cityCategory && cityName) {
+      const q = { "categorization.category_name": cityCategory };
+      q.$or = [
+        { "product_attributes.available_cities": "India" },
+        { "product_attributes.available_cities": { $regex: new RegExp(`^${cityName.trim()}$`, "i") } },
+      ];
+      const products = await Product.find(q)
+        .select("_id product_id name slug sku selling_price media categorization")
+        .lean();
+      return res.json({ total: products.length, products });
+    }
+
+    if (!pageKey) return res.status(400).json({ error: "pageKey or cityCategory+cityName required" });
 
     const filters = resolveFiltersFromPageKey(pageKey);
     const query   = {};
