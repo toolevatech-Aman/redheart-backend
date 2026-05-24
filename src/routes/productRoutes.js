@@ -6,6 +6,7 @@ import {
   getProductBySlug,
   getAllProductSlugs,
   getProductsByIds,
+  getProductsForPage,
   updateReview,
   addProduct,
   editProduct,
@@ -23,6 +24,7 @@ const router = express.Router();
 router.get("/", getProducts);                        // Search/filter products
 router.get("/all-slugs", getAllProductSlugs);        // Lightweight list for sitemap
 router.post("/by-ids", getProductsByIds);            // Fetch multiple products by _id array
+router.get("/for-page", getProductsForPage);        // Fetch all products for a page (admin sequencer)
 router.get("/slug/:slug", getProductBySlug);         // Full product details by slug (SEO)
 router.get("/:product_id", getProductById);          // Full product details by product_id
 router.post("/:product_id/review", updateReview);    // Add review

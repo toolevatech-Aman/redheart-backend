@@ -1,5 +1,6 @@
 // controllers/productController.js
 import Product from "../models/Product.js";
+import { resolveFiltersFromPageKey } from "../utils/urlFilters.js";
 import fs from "fs";
 import csv from "csv-parser";
 // ---------------- PUBLIC ----------------
@@ -157,6 +158,51 @@ export const getProductBySlug = async (req, res) => {
     );
     if (!product) return res.status(404).json({ message: "Product not found" });
     res.json(product);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// GET /products/for-page?pageKey=flowers/birthday
+// Returns ALL products that appear on a given frontend page (used by admin sequencer)
+export const getProductsForPage = async (req, res) => {
+  try {
+    const { pageKey } = req.query;
+    if (!pageKey) return res.status(400).json({ error: "pageKey required" });
+
+    const filters = resolveFiltersFromPageKey(pageKey);
+    const query   = {};
+
+    if (filters.category_name)
+      query["categorization.category_name"] = filters.category_name;
+    if (filters.subcategory_name?.length)
+      query["categorization.subcategory_name"] = { $in: filters.subcategory_name };
+    if (filters.occasion_tags?.length)
+      query["categorization.occasion_tags"] = { $in: filters.occasion_tags };
+    if (filters.festival_tags?.length)
+      query["categorization.festival_tags"] = { $in: filters.festival_tags };
+    if (filters.relationship?.length)
+      query["categorization.relationship"] = { $in: filters.relationship };
+    if (filters.type?.length)
+      query["categorization.type"] = { $in: filters.type };
+    if (filters.color?.length)
+      query["product_attributes.color"] = { $in: filters.color };
+
+    // Combo/mixed pages: fetch from all 3 categories
+    let products;
+    if (filters.isCombo || (filters.isMixed && !Object.keys(query).length)) {
+      products = await Product.find({
+        "categorization.category_name": { $in: ["Flowers", "Cakes", "Plants"] },
+      })
+        .select("_id product_id name slug sku selling_price media categorization")
+        .lean();
+    } else {
+      products = await Product.find(query)
+        .select("_id product_id name slug sku selling_price media categorization")
+        .lean();
+    }
+
+    res.json({ total: products.length, products });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
