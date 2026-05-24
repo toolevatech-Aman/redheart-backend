@@ -1,4 +1,35 @@
 import User from "../models/User.js";
+import Order from "../models/order.js";
+
+// ================= ADMIN: GET ALL USERS =================
+export const getAllUsersAdmin = async (req, res) => {
+  try {
+    const users = await User.find({}).select('-tokens -coupons').sort({ createdAt: -1 });
+
+    // Get order counts per user
+    const orderCounts = await Order.aggregate([
+      { $group: { _id: "$userId", count: { $sum: 1 } } }
+    ]);
+    const orderMap = {};
+    orderCounts.forEach(o => { orderMap[o._id] = o.count; });
+
+    const result = users.map(u => ({
+      _id: u._id,
+      name: u.name,
+      email: u.email,
+      phone: u.phone,
+      avatar: u.avatar,
+      role: u.role,
+      isVerified: u.isVerified,
+      orderCount: orderMap[u.userId] || 0,
+      createdAt: u.createdAt,
+    }));
+
+    res.json({ success: true, total: result.length, data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
 
 // ================= UPDATE PROFILE =================
 
