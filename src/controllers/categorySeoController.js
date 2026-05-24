@@ -36,10 +36,10 @@ export const getPageByKey = async (req, res) => {
 export const updatePage = async (req, res) => {
   try {
     const { id } = req.params;
-    const { h1, metaTitle, metaDescription, canonicalUrl, metaKeyword, footerContent, faqs, breadcrumb } = req.body;
+    const { h1, metaTitle, metaDescription, canonicalUrl, metaKeyword, footerContent, faqs, breadcrumb, pinnedProducts } = req.body;
     const updated = await CategorySeoPage.findByIdAndUpdate(
       id,
-      { h1, metaTitle, metaDescription, canonicalUrl, metaKeyword, footerContent, faqs, breadcrumb },
+      { h1, metaTitle, metaDescription, canonicalUrl, metaKeyword, footerContent, faqs, breadcrumb, pinnedProducts },
       { new: true }
     );
     if (!updated) return res.status(404).json({ success: false, message: "Page not found" });

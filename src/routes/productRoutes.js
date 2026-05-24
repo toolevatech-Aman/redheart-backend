@@ -5,6 +5,7 @@ import {
   getProductById,
   getProductBySlug,
   getAllProductSlugs,
+  getProductsByIds,
   updateReview,
   addProduct,
   editProduct,
@@ -21,6 +22,7 @@ const router = express.Router();
 // Public APIs
 router.get("/", getProducts);                        // Search/filter products
 router.get("/all-slugs", getAllProductSlugs);        // Lightweight list for sitemap
+router.post("/by-ids", getProductsByIds);            // Fetch multiple products by _id array
 router.get("/slug/:slug", getProductBySlug);         // Full product details by slug (SEO)
 router.get("/:product_id", getProductById);          // Full product details by product_id
 router.post("/:product_id/review", updateReview);    // Add review

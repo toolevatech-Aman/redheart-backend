@@ -162,6 +162,24 @@ export const getProductBySlug = async (req, res) => {
   }
 };
 
+// POST /products/by-ids — fetch multiple products by their _id array (for pinned products)
+export const getProductsByIds = async (req, res) => {
+  try {
+    const { ids } = req.body; // array of _id strings
+    if (!Array.isArray(ids) || ids.length === 0) return res.json([]);
+    const products = await Product.find({ _id: { $in: ids } }).select(
+      "-costing_price -care_and_logistics.add_ons.costing_price -variations.costing_price"
+    );
+    // Return in the same order as requested ids
+    const map = {};
+    products.forEach(p => { map[p._id.toString()] = p; });
+    const ordered = ids.map(id => map[id]).filter(Boolean);
+    res.json(ordered);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // Update review for a product
 export const updateReview = async (req, res) => {
   try {

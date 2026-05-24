@@ -16,6 +16,16 @@ const faqSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const pinnedProductSchema = new mongoose.Schema(
+  {
+    productId: { type: String, required: true }, // product _id from products collection
+    position:  { type: Number, required: true }, // 1-based display position
+    name:      { type: String, default: "" },    // cached name for admin display
+    image:     { type: String, default: "" },    // cached image for admin display
+  },
+  { _id: false }
+);
+
 const categoryPageSchema = new mongoose.Schema(
   {
     pageKey:         { type: String, required: true, unique: true }, // e.g. "flowers/roses"
@@ -29,8 +39,9 @@ const categoryPageSchema = new mongoose.Schema(
     canonicalUrl:    { type: String, default: "" },
     metaKeyword:     { type: String, default: "" },
     footerContent:   { type: String, default: "" },
-    faqs:            { type: [faqSchema], default: [] },
-    breadcrumb:      { type: [breadcrumbSchema], default: [] },
+    faqs:            { type: [faqSchema],           default: [] },
+    breadcrumb:      { type: [breadcrumbSchema],    default: [] },
+    pinnedProducts:  { type: [pinnedProductSchema], default: [] },
   },
   { timestamps: true }
 );
