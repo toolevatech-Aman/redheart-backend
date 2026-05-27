@@ -482,6 +482,10 @@ export const importProductsFromCSV = async (req, res) => {
                 fragrance_level: row["product_attributes.fragrance_level"],
                 vase_life_days_min: toNumber(row["product_attributes.vase_life_days_min"]),
                 origin: row["product_attributes.origin"],
+                available_cities: row["product_attributes.available_cities"] || "India",
+                delivery_type: ["same_day", "courier"].includes(row["product_attributes.delivery_type"])
+                  ? row["product_attributes.delivery_type"]
+                  : "same_day",
               },
 
               media: {
@@ -654,6 +658,10 @@ export const updateProductsFromCSV = async (req, res) => {
                 fragrance_level: row["product_attributes.fragrance_level"] || existingProduct.product_attributes.fragrance_level,
                 vase_life_days_min: row["product_attributes.vase_life_days_min"] ? toNumber(row["product_attributes.vase_life_days_min"]) : existingProduct.product_attributes.vase_life_days_min,
                 origin: row["product_attributes.origin"] || existingProduct.product_attributes.origin,
+                available_cities: row["product_attributes.available_cities"] || existingProduct.product_attributes.available_cities,
+                delivery_type: ["same_day", "courier"].includes(row["product_attributes.delivery_type"])
+                  ? row["product_attributes.delivery_type"]
+                  : existingProduct.product_attributes.delivery_type || "same_day",
               },
 
               media: {
