@@ -32,6 +32,7 @@ const productSchema = new mongoose.Schema(
       vase_life_days_min: { type: Number },
       origin: { type: String },
       available_cities: { type: String, required: true, default: "India" },
+      delivery_type: { type: String, enum: ["same_day", "courier"], default: "same_day" },
     },
 
     media: {

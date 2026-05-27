@@ -11,6 +11,7 @@ import {
   addProduct,
   editProduct,
   deleteProduct,
+  updateDeliveryType,
   updateProductsFromCSV
 } from "../controllers/productController.js";
 import auth from "../middlewares/authMiddleware.js";
@@ -32,6 +33,7 @@ router.post("/:product_id/review", updateReview);    // Add review
 // Admin APIs
 router.post("/", auth, isAdmin, addProduct);
 router.put("/:product_id", auth, isAdmin, editProduct);
+router.patch("/:product_id/delivery-type", auth, isAdmin, updateDeliveryType);
 router.delete("/:product_id", auth, isAdmin, deleteProduct);
 router.post(
   "/import",

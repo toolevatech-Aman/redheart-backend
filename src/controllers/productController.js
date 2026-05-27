@@ -304,6 +304,26 @@ export const editProduct = async (req, res) => {
   }
 };
 
+// Update delivery_type only
+export const updateDeliveryType = async (req, res) => {
+  try {
+    const { product_id } = req.params;
+    const { delivery_type } = req.body;
+    if (!["same_day", "courier"].includes(delivery_type)) {
+      return res.status(400).json({ message: "delivery_type must be 'same_day' or 'courier'" });
+    }
+    const product = await Product.findOneAndUpdate(
+      { product_id },
+      { $set: { "product_attributes.delivery_type": delivery_type } },
+      { new: true }
+    );
+    if (!product) return res.status(404).json({ message: "Product not found" });
+    res.json({ message: "Delivery type updated", product });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // Delete product
 export const deleteProduct = async (req, res) => {
   try {
