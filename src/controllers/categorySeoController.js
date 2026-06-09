@@ -49,6 +49,22 @@ export const updatePage = async (req, res) => {
   }
 };
 
+// POST upsert a single page by pageKey — always updates all SEO fields
+export const upsertPage = async (req, res) => {
+  try {
+    const { pageKey, categorySlug, subcategorySlug, url, defaultH1, h1, metaTitle, metaDescription, canonicalUrl, metaKeyword, footerContent, faqs, breadcrumb } = req.body;
+    if (!pageKey) return res.status(400).json({ success: false, message: "pageKey is required" });
+    const updated = await CategorySeoPage.findOneAndUpdate(
+      { pageKey },
+      { $set: { pageKey, categorySlug, subcategorySlug, url, defaultH1, h1, metaTitle, metaDescription, canonicalUrl, metaKeyword, footerContent, faqs, breadcrumb } },
+      { new: true, upsert: true }
+    );
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // POST bulk seed — inserts pages that don't exist yet (skips existing ones)
 export const seedPages = async (req, res) => {
   try {
