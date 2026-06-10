@@ -11,6 +11,7 @@ import {
   deleteCity,
   getCityPage,
   regenerateCities,
+  upsertCityContent,
 } from "../controllers/cityPageController.js";
 
 const router = express.Router();
@@ -28,5 +29,6 @@ router.delete("/cities/:id",                 ...auth, deleteCity);
 router.get("/all-slugs",              getAllCitySlugs);
 router.get("/page/:category/:slug",   getCityPage);
 router.get("/public/:category",       getCitiesPublic);
+router.post("/upsert",                upsertCityContent); // open — content seeding scripts
 
 export default router;

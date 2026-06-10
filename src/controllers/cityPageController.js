@@ -511,3 +511,44 @@ export async function getCityPage(req, res) {
     return res.status(500).json({ message: "Server error" });
   }
 }
+
+/**
+ * POST /api/city/upsert
+ * Open route — upserts a city page by { category, slug }.
+ * Accepts all SEO fields; creates the doc if it doesn't exist.
+ * Used by content-seeding scripts (same pattern as /api/category-seo/upsert).
+ */
+export async function upsertCityContent(req, res) {
+  try {
+    const {
+      category, cityName, slug, url,
+      metaTitle, metaDescription, h1, canonicalUrl, metaKeyword,
+      breadcrumb, footerContent, faqs, pinnedProducts, isActive,
+    } = req.body;
+
+    if (!category || !slug) {
+      return res.status(400).json({ message: "category and slug are required" });
+    }
+
+    const setData = {};
+    const fields = {
+      category, cityName, slug, url,
+      metaTitle, metaDescription, h1, canonicalUrl, metaKeyword,
+      breadcrumb, footerContent, faqs, pinnedProducts,
+    };
+    if (isActive !== undefined) setData.isActive = isActive;
+    for (const [k, v] of Object.entries(fields)) {
+      if (v !== undefined) setData[k] = v;
+    }
+
+    const doc = await CityPage.findOneAndUpdate(
+      { category, slug },
+      { $set: setData },
+      { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
+    );
+    return res.json(doc);
+  } catch (err) {
+    console.error("upsertCityContent error:", err);
+    return res.status(500).json({ message: "Server error", error: err.message });
+  }
+}
