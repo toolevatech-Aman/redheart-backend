@@ -18,12 +18,13 @@ import bulkRoutes from './routes/bulkRoutes.js';
 import cityPageRoutes from './routes/cityPageRoutes.js';
 import categorySeoRoutes from './routes/categorySeoRoutes.js';
 import categoryConfigRoutes from './routes/categoryConfigRoutes.js';
+import valentineRoutes from './routes/valentineRoutes.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
 const app = express();
 
 // Middlewares
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(morgan("dev"));
 
@@ -54,6 +55,7 @@ app.use("/api/bulk",     bulkRoutes);
 app.use("/api/city",         cityPageRoutes);
 app.use("/api/category-seo", categorySeoRoutes);
 app.use("/api/category-config", categoryConfigRoutes);
+app.use("/api/valentine",       valentineRoutes);
 
 // ── Sitemaps (public, no /api prefix) ────────────────────────────────────────
 app.get("/sitemap_cities.xml", citiesSitemap);
