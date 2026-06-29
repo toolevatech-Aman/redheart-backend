@@ -16,6 +16,8 @@ const valentinePageSchema = new mongoose.Schema(
     specialDate:   { type: String, default: "" },
     selectedGift:  { type: String, default: "none" },
     email:         { type: String, default: "" },
+    photos:        { type: [String], default: [] },        // extra base64/URL photos
+    whatsapp:      { type: String, default: "" },          // waitlist WhatsApp number
 
     // Tier: free | popular | lifetime
     tier: { type: String, enum: ["free", "popular", "lifetime"], default: "free" },
