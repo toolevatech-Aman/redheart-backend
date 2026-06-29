@@ -17,10 +17,17 @@ const valentinePageSchema = new mongoose.Schema(
     selectedGift:  { type: String, default: "none" },
     email:         { type: String, default: "" },
 
+    // Tier: free | popular | lifetime
+    tier: { type: String, enum: ["free", "popular", "lifetime"], default: "free" },
+
     // Payment / order tracking
     isPaid:             { type: Boolean, default: false },
     razorpayPaymentId:  { type: String, default: "" },
     amountPaid:         { type: Number, default: 0 },
+
+    // Analytics
+    viewCount:    { type: Number, default: 0 },
+    lastViewedAt: { type: Date },
 
     // Recipient response
     responded:    { type: Boolean, default: false },

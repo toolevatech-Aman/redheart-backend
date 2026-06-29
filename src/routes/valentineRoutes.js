@@ -2,14 +2,15 @@ import express from "express";
 import {
   createValentinePage,
   getValentinePage,
+  trackView,
   recordResponse,
 } from "../controllers/valentineController.js";
 
 const router = express.Router();
 
-// Public — anyone can create or open a page
 router.post("/",              createValentinePage);
 router.get("/:slug",          getValentinePage);
+router.patch("/:slug/view",   trackView);
 router.post("/:slug/respond", recordResponse);
 
 export default router;
