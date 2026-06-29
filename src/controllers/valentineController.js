@@ -102,7 +102,11 @@ export const trackView = async (req, res) => {
 export const recordResponse = async (req, res) => {
   try {
     const { slug } = req.params;
-    const { address, phone } = req.body || {};
+    const { address } = req.body || {};
+    const addrObj = typeof address === "object" ? address : {};
+    const addrStr = addrObj.line1
+      ? `${addrObj.name}, ${addrObj.line1}, ${addrObj.city} - ${addrObj.pincode}`
+      : (address || "");
 
     const page = await ValentinePage.findOneAndUpdate(
       { slug },
@@ -110,8 +114,8 @@ export const recordResponse = async (req, res) => {
         $set: {
           responded:       true,
           respondedAt:     new Date(),
-          deliveryAddress: address || "",
-          deliveryPhone:   phone   || "",
+          deliveryAddress: addrStr,
+          deliveryPhone:   addrObj.phone || "",
         },
       },
       { new: true }
