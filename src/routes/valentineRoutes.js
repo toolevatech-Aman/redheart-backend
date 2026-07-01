@@ -4,13 +4,18 @@ import {
   getValentinePage,
   trackView,
   recordResponse,
+  createOrder,
+  verifyPayment,
 } from "../controllers/valentineController.js";
 
 const router = express.Router();
 
-router.post("/",              createValentinePage);
-router.get("/:slug",          getValentinePage);
-router.patch("/:slug/view",   trackView);
-router.post("/:slug/respond", recordResponse);
+// Static routes must come before /:slug
+router.post("/",                   createValentinePage);
+router.post("/create-order",       createOrder);
+router.post("/verify-payment",     verifyPayment);
+router.get("/:slug",               getValentinePage);
+router.patch("/:slug/view",        trackView);
+router.post("/:slug/respond",      recordResponse);
 
 export default router;
