@@ -24,8 +24,14 @@ const valentinePageSchema = new mongoose.Schema(
 
     // Payment / order tracking
     isPaid:             { type: Boolean, default: false },
+    razorpayOrderId:    { type: String, default: "" },
     razorpayPaymentId:  { type: String, default: "" },
     amountPaid:         { type: Number, default: 0 },
+
+    // Gift + delivery (set at payment time)
+    giftId:       { type: String, default: "" },
+    deliveryDate: { type: String, default: "" },
+    deliverySlot: { type: String, default: "" },
 
     // Analytics
     viewCount:    { type: Number, default: 0 },
