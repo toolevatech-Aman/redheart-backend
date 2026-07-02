@@ -189,9 +189,25 @@ export const createOrder = async (req, res) => {
       receipt:  `rh_${slug}_${Date.now()}`,
     });
 
+    // Store order context so webhook can activate the page if browser closes before verify-payment
+    const addrObj = req.body.address || {};
+    const pendingAddr = addrObj.line1
+      ? `${addrObj.name}, ${addrObj.line1}, ${addrObj.city} - ${addrObj.pincode}`
+      : "";
+
     await ValentinePage.findOneAndUpdate(
       { slug },
-      { $set: { razorpayOrderId: order.id } },
+      {
+        $set: {
+          razorpayOrderId:      order.id,
+          pendingTierId:        tierId,
+          pendingGiftId:        req.body.giftId        || "",
+          pendingDeliveryDate:  req.body.deliveryDate  || "",
+          pendingDeliverySlot:  req.body.deliverySlot  || "",
+          pendingDeliveryAddr:  pendingAddr,
+          pendingDeliveryPhone: addrObj.phone || "",
+        },
+      },
       { upsert: true, setDefaultsOnInsert: true }
     );
 
@@ -266,6 +282,66 @@ export const verifyPayment = async (req, res) => {
     return res.status(200).json({ ok: true });
   } catch (err) {
     console.error("verifyPayment error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ─── POST /api/valentine/webhook — Razorpay webhook (raw body required) ───────
+export const razorpayWebhook = async (req, res) => {
+  try {
+    const { keySecret } = await getRazorpayKeys();
+
+    const signature = req.headers["x-razorpay-signature"];
+    const body      = req.rawBody; // set by express raw-body middleware on this route
+
+    if (!signature || !body) return res.status(400).json({ error: "missing signature or body" });
+
+    const expected = crypto
+      .createHmac("sha256", keySecret)
+      .update(body)
+      .digest("hex");
+
+    if (expected !== signature) {
+      return res.status(400).json({ error: "invalid webhook signature" });
+    }
+
+    const event = JSON.parse(body);
+    if (event.event !== "payment.captured") return res.status(200).json({ ok: true });
+
+    const payment  = event.payload?.payment?.entity;
+    const orderId  = payment?.order_id;
+    if (!orderId) return res.status(200).json({ ok: true });
+
+    // Find page by the order ID stored at create-order time
+    const page = await ValentinePage.findOne({ razorpayOrderId: orderId });
+    if (!page || page.isPaid) return res.status(200).json({ ok: true }); // already activated
+
+    const tierId    = page.pendingTierId || "free";
+    const tierPrice = TIER_PRICES[tierId] ?? 99;
+    const giftId    = page.pendingGiftId || "";
+    const giftPrice = (giftId && giftId !== "none") ? (GIFT_PRICES[giftId] || 0) : 0;
+
+    await ValentinePage.findOneAndUpdate(
+      { _id: page._id },
+      {
+        $set: {
+          isPaid:            true,
+          tier:              tierId,
+          razorpayPaymentId: payment.id,
+          amountPaid:        tierPrice + giftPrice,
+          giftId:            giftId,
+          deliveryDate:      page.pendingDeliveryDate  || "",
+          deliverySlot:      page.pendingDeliverySlot  || "",
+          deliveryAddress:   page.pendingDeliveryAddr  || "",
+          deliveryPhone:     page.pendingDeliveryPhone || "",
+        },
+      }
+    );
+
+    console.log(`[webhook] Activated page ${page.slug} via payment.captured`);
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error("razorpayWebhook error:", err);
     return res.status(500).json({ error: "Server error" });
   }
 };
