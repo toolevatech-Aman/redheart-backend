@@ -6,6 +6,7 @@ const valentinePageSchema = new mongoose.Schema(
     partnerName:   { type: String, default: "" },
     yourName:      { type: String, default: "" },
     occasion:      { type: String, default: "Valentine's Day" },
+    occasionKey:   { type: String, default: "" },           // birthday | proposal | apology | … drives per-occasion experience
     question:      { type: String, default: "Will you be mine? 💌" },
     yesMessage:    { type: String, default: "YAY! I knew you would say yes!" },
     photoPreview:  { type: String, default: "" },          // base64 or URL
@@ -46,8 +47,10 @@ const valentinePageSchema = new mongoose.Schema(
     lastViewedAt: { type: Date },
 
     // Recipient response
-    responded:    { type: Boolean, default: false },
-    respondedAt:  { type: Date },
+    responded:       { type: Boolean, default: false },
+    respondedAt:     { type: Date },
+    recipientName:   { type: String, default: "" },
+    followUpAnswers: { type: [{ question: String, answer: String }], default: [] },
 
     // Delivery
     deliveryAddress: { type: String, default: "" },
