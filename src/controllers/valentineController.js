@@ -289,15 +289,20 @@ export const verifyPayment = async (req, res) => {
 // ─── POST /api/valentine/webhook — Razorpay webhook (raw body required) ───────
 export const razorpayWebhook = async (req, res) => {
   try {
-    const { keySecret } = await getRazorpayKeys();
+    // Webhook secret is separate from API key secret — set RAZORPAY_WEBHOOK_SECRET in .env
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      console.error("RAZORPAY_WEBHOOK_SECRET not set — webhook disabled");
+      return res.status(200).json({ ok: true }); // return 200 so Razorpay doesn't retry
+    }
 
     const signature = req.headers["x-razorpay-signature"];
-    const body      = req.rawBody; // set by express raw-body middleware on this route
+    const body      = req.rawBody;
 
     if (!signature || !body) return res.status(400).json({ error: "missing signature or body" });
 
     const expected = crypto
-      .createHmac("sha256", keySecret)
+      .createHmac("sha256", webhookSecret)
       .update(body)
       .digest("hex");
 
