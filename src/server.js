@@ -19,8 +19,17 @@ import cityPageRoutes from './routes/cityPageRoutes.js';
 import categorySeoRoutes from './routes/categorySeoRoutes.js';
 import categoryConfigRoutes from './routes/categoryConfigRoutes.js';
 import valentineRoutes from './routes/valentineRoutes.js';
+import { razorpayWebhook } from './controllers/valentineController.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
 const app = express();
+
+// Razorpay webhook — must receive raw body BEFORE express.json parses it
+app.post(
+  "/api/valentine/webhook",
+  express.raw({ type: "application/json" }),
+  (req, res, next) => { req.rawBody = req.body.toString("utf8"); next(); },
+  razorpayWebhook
+);
 
 // Middlewares
 app.use(cors());
