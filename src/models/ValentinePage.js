@@ -33,6 +33,14 @@ const valentinePageSchema = new mongoose.Schema(
     deliveryDate: { type: String, default: "" },
     deliverySlot: { type: String, default: "" },
 
+    // Pending order context — stored at create-order, used by webhook if browser closes before verify-payment
+    pendingTierId:        { type: String, default: "" },
+    pendingGiftId:        { type: String, default: "" },
+    pendingDeliveryDate:  { type: String, default: "" },
+    pendingDeliverySlot:  { type: String, default: "" },
+    pendingDeliveryAddr:  { type: String, default: "" },
+    pendingDeliveryPhone: { type: String, default: "" },
+
     // Analytics
     viewCount:    { type: Number, default: 0 },
     lastViewedAt: { type: Date },
