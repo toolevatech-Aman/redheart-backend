@@ -6,6 +6,10 @@ import {
   recordResponse,
   createOrder,
   verifyPayment,
+  sendMagicLink,
+  verifyMagicLink,
+  getMyPages,
+  sendAbandonmentEmails,
 } from "../controllers/valentineController.js";
 
 const router = express.Router();
@@ -14,6 +18,10 @@ const router = express.Router();
 router.post("/",                   createValentinePage);
 router.post("/create-order",       createOrder);
 router.post("/verify-payment",     verifyPayment);
+router.post("/magic-link",         sendMagicLink);
+router.post("/verify-magic-link",  verifyMagicLink);
+router.get("/my-pages",            getMyPages);
+router.post("/send-abandonment",   sendAbandonmentEmails);
 router.get("/:slug",               getValentinePage);
 router.patch("/:slug/view",        trackView);
 router.post("/:slug/respond",      recordResponse);
