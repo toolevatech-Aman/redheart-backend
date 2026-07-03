@@ -19,7 +19,7 @@ import cityPageRoutes from './routes/cityPageRoutes.js';
 import categorySeoRoutes from './routes/categorySeoRoutes.js';
 import categoryConfigRoutes from './routes/categoryConfigRoutes.js';
 import valentineRoutes from './routes/valentineRoutes.js';
-import { razorpayWebhook } from './controllers/valentineController.js';
+import { razorpayWebhook, runAbandonmentEmails } from './controllers/valentineController.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
 const app = express();
 
@@ -80,3 +80,11 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// Hourly abandonment recovery — fire once on startup (offset by 5 min) then every hour
+setTimeout(() => {
+  runAbandonmentEmails().then(r => console.log("[abandonment]", r)).catch(() => {});
+  setInterval(() => {
+    runAbandonmentEmails().then(r => console.log("[abandonment]", r)).catch(() => {});
+  }, 60 * 60 * 1000);
+}, 5 * 60 * 1000);
