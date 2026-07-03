@@ -4,6 +4,9 @@ import Razorpay     from "razorpay";
 import ValentinePage from "../models/ValentinePage.js";
 import ConfidentialKey from "../models/confidentialKeys.js";
 
+// ─── Dashboard magic-link OTP store (in-memory, survives restarts poorly but fine for low volume) ──
+const dashOtpStore = new Map(); // email → { otp, expiresAt }
+
 // ─── Tier + gift pricing (server-side source of truth) ───────────────────────
 const TIER_PRICES = { free: 99, popular: 179, lifetime: 249 };
 const GIFT_PRICES = {
@@ -62,8 +65,8 @@ async function sendYesNotification(page) {
             View your page →
           </a>
           <p style="color:#aaa;font-size:12px;margin-top:24px;">
-            This notification is because you created a surprise page on RedHeart.<br/>
-            Page views so far: <strong>${page.viewCount || 1}</strong>
+            Page views so far: <strong>${page.viewCount || 1}</strong><br/>
+            <a href="https://redheart.in/dashboard" style="color:#c0392b;">View all your pages →</a>
           </p>
         </div>
       `,
@@ -282,6 +285,180 @@ export const verifyPayment = async (req, res) => {
     return res.status(200).json({ ok: true });
   } catch (err) {
     console.error("verifyPayment error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ─── Dashboard helpers ────────────────────────────────────────────────────────
+function dashSecret() {
+  return process.env.DASHBOARD_SECRET || "rh_dash_fallback_s3cr3t";
+}
+
+function signDashToken(email) {
+  const expiry = Date.now() + 24 * 60 * 60 * 1000; // 24 h
+  const sig    = crypto.createHmac("sha256", dashSecret()).update(`${email}:${expiry}`).digest("hex");
+  return Buffer.from(JSON.stringify({ email, expiry, sig })).toString("base64url");
+}
+
+function verifyDashToken(token) {
+  try {
+    const { email, expiry, sig } = JSON.parse(Buffer.from(token, "base64url").toString("utf8"));
+    if (Date.now() > expiry) return null;
+    const expected = crypto.createHmac("sha256", dashSecret()).update(`${email}:${expiry}`).digest("hex");
+    if (sig !== expected) return null;
+    return email;
+  } catch {
+    return null;
+  }
+}
+
+// ─── POST /api/valentine/magic-link ──────────────────────────────────────────
+export const sendMagicLink = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Valid email required" });
+    }
+
+    const otp       = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 min
+    dashOtpStore.set(email.toLowerCase(), { otp, expiresAt });
+
+    const transporter = getTransporter();
+    if (!transporter) return res.status(500).json({ error: "Email not configured" });
+
+    await transporter.sendMail({
+      from:    `"RedHeart 💗" <${process.env.GMAIL_USER || process.env.SMTP_USER}>`,
+      to:      email,
+      subject: "Your RedHeart dashboard code",
+      html: `
+        <div style="font-family:sans-serif;max-width:420px;margin:auto;padding:32px;background:#fff7f7;border-radius:16px;">
+          <h2 style="color:#c0392b;margin-bottom:8px;">Your login code</h2>
+          <p style="color:#555;font-size:15px;margin-bottom:24px;">
+            Enter this code on the dashboard to see your surprise pages.
+          </p>
+          <div style="font-size:40px;font-weight:900;letter-spacing:10px;color:#c0392b;text-align:center;margin:24px 0;">
+            ${otp}
+          </div>
+          <p style="color:#aaa;font-size:12px;text-align:center;">Expires in 10 minutes. Do not share this code.</p>
+        </div>
+      `,
+    });
+
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error("sendMagicLink error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ─── POST /api/valentine/verify-magic-link ────────────────────────────────────
+export const verifyMagicLink = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ error: "email and otp required" });
+
+    const key    = email.toLowerCase();
+    const stored = dashOtpStore.get(key);
+    if (!stored || stored.otp !== String(otp) || Date.now() > stored.expiresAt) {
+      return res.status(401).json({ error: "Invalid or expired code" });
+    }
+
+    dashOtpStore.delete(key);
+    const token = signDashToken(key);
+    return res.status(200).json({ ok: true, token });
+  } catch (err) {
+    console.error("verifyMagicLink error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ─── GET /api/valentine/my-pages ─────────────────────────────────────────────
+export const getMyPages = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token      = authHeader.replace("Bearer ", "").trim();
+    const email      = verifyDashToken(token);
+    if (!email) return res.status(401).json({ error: "Unauthorized" });
+
+    const pages = await ValentinePage.find(
+      { email },
+      {
+        slug: 1, partnerName: 1, occasionKey: 1, occasion: 1,
+        isPaid: 1, tier: 1, amountPaid: 1, viewCount: 1,
+        responded: 1, respondedAt: 1, recipientName: 1,
+        followUpAnswers: 1, createdAt: 1,
+      }
+    ).sort({ createdAt: -1 }).limit(50);
+
+    return res.status(200).json(pages);
+  } catch (err) {
+    console.error("getMyPages error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ─── Abandonment recovery (called internally by interval + HTTP endpoint) ─────
+export async function runAbandonmentEmails() {
+  const transporter = getTransporter();
+  if (!transporter) return { sent: 0, skipped: "no transporter" };
+
+  const now              = new Date();
+  const fourHoursAgo    = new Date(now - 4  * 60 * 60 * 1000);
+  const twentyFourAgo   = new Date(now - 24 * 60 * 60 * 1000);
+
+  const pages = await ValentinePage.find({
+    isPaid:               false,
+    email:                { $ne: "" },
+    partnerName:          { $ne: "" },
+    abandonmentEmailSent: { $ne: true },
+    createdAt:            { $gte: twentyFourAgo, $lte: fourHoursAgo },
+  }).limit(100);
+
+  let sent = 0;
+  for (const page of pages) {
+    try {
+      await transporter.sendMail({
+        from:    `"RedHeart 💗" <${process.env.GMAIL_USER || process.env.SMTP_USER}>`,
+        to:      page.email,
+        subject: `Your page for ${page.partnerName || "them"} is still waiting 💌`,
+        html: `
+          <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;background:#fff7f7;border-radius:16px;">
+            <h1 style="color:#c0392b;font-size:24px;margin-bottom:8px;">Almost there! 💗</h1>
+            <p style="color:#555;font-size:15px;margin-bottom:20px;">
+              You created a surprise page for <strong>${page.partnerName}</strong> but haven't activated it yet.
+              Once you pay, your page goes live and ${page.partnerName} gets the experience!
+            </p>
+            <a href="https://redheart.in/valentine-surprise/create?slug=${page.slug}"
+              style="display:inline-block;background:#c0392b;color:#fff;padding:14px 28px;border-radius:50px;text-decoration:none;font-weight:bold;font-size:15px;">
+              Finish & Activate →
+            </a>
+            <p style="color:#aaa;font-size:12px;margin-top:24px;">
+              Pages start at just ₹99. Gifts are optional.
+            </p>
+          </div>
+        `,
+      });
+      await ValentinePage.updateOne({ _id: page._id }, { $set: { abandonmentEmailSent: true } });
+      sent++;
+    } catch (err) {
+      console.error(`Abandonment email failed for ${page.slug}:`, err.message);
+    }
+  }
+  return { sent, total: pages.length };
+}
+
+// ─── POST /api/valentine/send-abandonment ─────────────────────────────────────
+export const sendAbandonmentEmails = async (req, res) => {
+  const secret = req.headers["x-abandonment-secret"] || req.body?.secret;
+  if (secret !== process.env.ABANDONMENT_SECRET) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  try {
+    const result = await runAbandonmentEmails();
+    return res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    console.error("sendAbandonmentEmails error:", err);
     return res.status(500).json({ error: "Server error" });
   }
 };
