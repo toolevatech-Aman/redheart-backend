@@ -56,6 +56,9 @@ const valentinePageSchema = new mongoose.Schema(
     deliveryAddress: { type: String, default: "" },
     deliveryPhone:   { type: String, default: "" },
     orderId:         { type: String, default: "" },
+
+    // Abandonment recovery
+    abandonmentEmailSent: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
