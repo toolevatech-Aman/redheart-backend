@@ -20,6 +20,7 @@ import categorySeoRoutes from './routes/categorySeoRoutes.js';
 import categoryConfigRoutes from './routes/categoryConfigRoutes.js';
 import valentineRoutes from './routes/valentineRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
+import cartRoutes from './routes/cartRoutes.js';
 import { razorpayWebhook, runAbandonmentEmails } from './controllers/valentineController.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
 const app = express();
@@ -67,6 +68,7 @@ app.use("/api/category-seo", categorySeoRoutes);
 app.use("/api/category-config", categoryConfigRoutes);
 app.use("/api/valentine",       valentineRoutes);
 app.use("/api/subscriptions",   subscriptionRoutes);
+app.use("/api/cart",            cartRoutes);
 
 // ── Sitemaps (public, no /api prefix) ────────────────────────────────────────
 app.get("/sitemap_cities.xml", citiesSitemap);

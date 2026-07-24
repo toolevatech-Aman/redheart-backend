@@ -1,29 +1,93 @@
 import User from "../models/User.js";
 import Order from "../models/order.js";
+import Cart from "../models/Cart.js";
+
+const PRODUCT_CATEGORY_SLUG = { Flowers: "flowers", Cakes: "cakes", Plants: "plants" };
 
 // ================= ADMIN: GET ALL USERS =================
 export const getAllUsersAdmin = async (req, res) => {
   try {
-    const users = await User.find({}).select('-tokens -coupons').sort({ createdAt: -1 });
+    const users = await User.find({}).select('-tokens -coupons').sort({ createdAt: -1 }).lean();
+    const userIds = users.map(u => u.userId);
 
-    // Get order counts per user
-    const orderCounts = await Order.aggregate([
-      { $group: { _id: "$userId", count: { $sum: 1 } } }
+    // ── Order counts + last order per user ──────────────────────────────────
+    const orderAgg = await Order.aggregate([
+      { $match: { userId: { $in: userIds } } },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: "$userId",
+          count: { $sum: 1 },
+          totalSpent: { $sum: "$totalPrice" },
+          lastOrderDate: { $first: "$createdAt" },
+          lastOrderStatus: { $first: "$orderStatus" },
+          lastOrderId: { $first: "$orderId" },
+        },
+      },
     ]);
     const orderMap = {};
-    orderCounts.forEach(o => { orderMap[o._id] = o.count; });
+    orderAgg.forEach(o => { orderMap[o._id] = o; });
 
-    const result = users.map(u => ({
-      _id: u._id,
-      name: u.name,
-      email: u.email,
-      phone: u.phone,
-      avatar: u.avatar,
-      role: u.role,
-      isVerified: u.isVerified,
-      orderCount: orderMap[u.userId] || 0,
-      createdAt: u.createdAt,
-    }));
+    // ── Cart contents per user ───────────────────────────────────────────────
+    const carts = await Cart.find({ userId: { $in: userIds } }).lean();
+    const cartMap = {};
+    carts.forEach(c => { cartMap[c.userId] = c; });
+
+    // ── Resolve product URLs for cart items ──────────────────────────────────
+    const pidSet = new Set();
+    carts.forEach(c => (c.items || []).forEach(ci => ci.productId && pidSet.add(String(ci.productId))));
+    const pids = [...pidSet];
+    const objectIds = pids.filter(id => /^[0-9a-fA-F]{24}$/.test(id));
+
+    const Product = (await import("../models/Product.js")).default;
+    const products = await Product.find({
+      $or: [
+        { _id: { $in: objectIds } },
+        { product_id: { $in: pids } },
+        { "variants._id": { $in: objectIds } },
+      ],
+    }).select("product_id slug sku categorization.category_name variants._id").lean();
+
+    const productUrlMap = {};
+    for (const p of products) {
+      const catName = p.categorization?.category_name || "";
+      const catSlug = PRODUCT_CATEGORY_SLUG[catName] || catName.toLowerCase();
+      const skuPart = p.sku ? `-${String(p.sku).toLowerCase()}` : "";
+      const url = `https://www.redheart.in/p/${catSlug}/${p.slug}${skuPart}`;
+      productUrlMap[String(p._id)] = url;
+      if (p.product_id) productUrlMap[p.product_id] = url;
+      (p.variants || []).forEach(v => { productUrlMap[String(v._id)] = url; });
+    }
+
+    const result = users.map(u => {
+      const orderInfo = orderMap[u.userId];
+      const cart = cartMap[u.userId];
+      const cartItems = (cart?.items || []).map(ci => ({
+        ...ci,
+        product_url: productUrlMap[String(ci.productId)] || null,
+      }));
+      const cartValue = cartItems.reduce((sum, i) => sum + (i.selling_price || 0) * (i.quantity || 0), 0);
+
+      return {
+        _id: u._id,
+        name: u.name,
+        email: u.email,
+        phone: u.phone,
+        avatar: u.avatar,
+        role: u.role,
+        isVerified: u.isVerified,
+        addresses: u.addresses || [],
+        orderCount: orderInfo?.count || 0,
+        totalSpent: orderInfo?.totalSpent || 0,
+        lastOrder: orderInfo
+          ? { orderId: orderInfo.lastOrderId, date: orderInfo.lastOrderDate, status: orderInfo.lastOrderStatus }
+          : null,
+        cartItems,
+        cartValue,
+        cartUpdatedAt: cart?.updatedAt || null,
+        createdAt: u.createdAt,
+      };
+    });
 
     res.json({ success: true, total: result.length, data: result });
   } catch (err) {
