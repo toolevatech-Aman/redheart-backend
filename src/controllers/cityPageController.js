@@ -1,4 +1,5 @@
 import CityPage from "../models/CityPage.js";
+import { revalidateTags } from "../utils/revalidate.js";
 
 // ── Utility helpers ───────────────────────────────────────────────────────────
 
@@ -417,6 +418,7 @@ export async function updateCity(req, res) {
 
     const city = await CityPage.findByIdAndUpdate(id, { $set: update }, { new: true, runValidators: true });
     if (!city) return res.status(404).json({ message: "City not found" });
+    revalidateTags([`city-${city.category}-${city.slug}`]);
     return res.json(city);
   } catch (err) {
     console.error("updateCity error:", err);

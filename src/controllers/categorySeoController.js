@@ -1,4 +1,5 @@
 import CategorySeoPage from "../models/CategorySeoPage.js";
+import { revalidateTags } from "../utils/revalidate.js";
 
 // GET /category-seo/all-slugs — lightweight list for sitemap generation
 export const getAllCategorySeoPaths = async (req, res) => {
@@ -43,6 +44,7 @@ export const updatePage = async (req, res) => {
       { new: true }
     );
     if (!updated) return res.status(404).json({ success: false, message: "Page not found" });
+    revalidateTags([`cat-seo-${updated.pageKey}`, `cat-seo-${updated.categorySlug}`]);
     res.json({ success: true, data: updated });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -59,6 +61,7 @@ export const upsertPage = async (req, res) => {
       { $set: { pageKey, categorySlug, subcategorySlug, url, defaultH1, h1, metaTitle, metaDescription, canonicalUrl, metaKeyword, footerContent, faqs, breadcrumb } },
       { new: true, upsert: true }
     );
+    revalidateTags([`cat-seo-${updated.pageKey}`, `cat-seo-${updated.categorySlug}`]);
     res.json({ success: true, data: updated });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

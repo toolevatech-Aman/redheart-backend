@@ -9,12 +9,12 @@ export const createOrder = async (req, res) => {
   try {
     const userId = req.user.userId;
     const orderData = req.body;
+    // Frontend sends deliveryDate as "DD-MM-YY" (see checkout/page.jsx). Reorder to
+    // an ISO "YYYY-MM-DD" string before parsing — never treat the leading DD as a year.
     if (orderData.deliveryDate) {
-      const parts = orderData.deliveryDate.split('-');
-      if (parts[0].length === 2) {
-        parts[0] = '20' + parts[0];
-      }
-      orderData.deliveryDate = new Date(parts.join('-'));
+      const [day, month, yearRaw] = orderData.deliveryDate.split('-');
+      const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw;
+      orderData.deliveryDate = new Date(`${year}-${month}-${day}`);
     }
     let razorpayOrder = null; // declare variable for response
 
@@ -143,13 +143,64 @@ export const verifyPayment = async (req, res) => {
     });
   }
 };
-// Get all orders (admin)
+// Get all orders (admin) — enriched with customer details and product links
+const PRODUCT_CATEGORY_SLUG = { Flowers: "flowers", Cakes: "cakes", Plants: "plants" };
+
 export const getAllOrders = async (req, res) => {
   try {
     const orders = await Order.find({
       paymentStatus: { $in: ["COD", "PAID"] } // filter
-    });
-    res.status(200).json({ success: true, data: orders });
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // ── Join customer details (User.userId is the same UUID as Order.userId) ──
+    const userIds = [...new Set(orders.map((o) => o.userId).filter(Boolean))];
+    const users = await User.find({ userId: { $in: userIds } })
+      .select("userId name email phone avatar")
+      .lean();
+    const userMap = Object.fromEntries(users.map((u) => [u.userId, u]));
+
+    // ── Join product URLs (cartItems.productId may be product._id, product_id, or a variant._id) ──
+    const pidSet = new Set();
+    orders.forEach((o) =>
+      (o.cartItems || []).forEach((ci) => ci.productId && pidSet.add(String(ci.productId)))
+    );
+    const pids = [...pidSet];
+    const objectIds = pids.filter((id) => /^[0-9a-fA-F]{24}$/.test(id));
+
+    const Product = (await import("../models/Product.js")).default;
+    const products = await Product.find({
+      $or: [
+        { _id: { $in: objectIds } },
+        { product_id: { $in: pids } },
+        { "variants._id": { $in: objectIds } },
+      ],
+    })
+      .select("product_id slug sku categorization.category_name variants._id")
+      .lean();
+
+    const productUrlMap = {};
+    for (const p of products) {
+      const catName = p.categorization?.category_name || "";
+      const catSlug = PRODUCT_CATEGORY_SLUG[catName] || catName.toLowerCase();
+      const skuPart = p.sku ? `-${String(p.sku).toLowerCase()}` : "";
+      const url = `https://www.redheart.in/p/${catSlug}/${p.slug}${skuPart}`;
+      productUrlMap[String(p._id)] = url;
+      if (p.product_id) productUrlMap[p.product_id] = url;
+      (p.variants || []).forEach((v) => { productUrlMap[String(v._id)] = url; });
+    }
+
+    const data = orders.map((o) => ({
+      ...o,
+      user: userMap[o.userId] || null,
+      cartItems: (o.cartItems || []).map((ci) => ({
+        ...ci,
+        product_url: productUrlMap[String(ci.productId)] || null,
+      })),
+    }));
+
+    res.status(200).json({ success: true, data });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Server Error', error: error.message });
