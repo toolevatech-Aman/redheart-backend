@@ -33,9 +33,12 @@ export const getAllUsersAdmin = async (req, res) => {
     const cartMap = {};
     carts.forEach(c => { cartMap[c.userId] = c; });
 
-    // ── Resolve product URLs for cart items ──────────────────────────────────
+    // ── Resolve product URLs for cart items + buy-now selections ─────────────
     const pidSet = new Set();
-    carts.forEach(c => (c.items || []).forEach(ci => ci.productId && pidSet.add(String(ci.productId))));
+    carts.forEach(c => {
+      (c.items || []).forEach(ci => ci.productId && pidSet.add(String(ci.productId)));
+      if (c.buyNowItem?.productId) pidSet.add(String(c.buyNowItem.productId));
+    });
     const pids = [...pidSet];
     const objectIds = pids.filter(id => /^[0-9a-fA-F]{24}$/.test(id));
 
@@ -67,6 +70,9 @@ export const getAllUsersAdmin = async (req, res) => {
         product_url: productUrlMap[String(ci.productId)] || null,
       }));
       const cartValue = cartItems.reduce((sum, i) => sum + (i.selling_price || 0) * (i.quantity || 0), 0);
+      const buyNowItem = cart?.buyNowItem
+        ? { ...cart.buyNowItem, product_url: productUrlMap[String(cart.buyNowItem.productId)] || null }
+        : null;
 
       return {
         _id: u._id,
@@ -84,6 +90,7 @@ export const getAllUsersAdmin = async (req, res) => {
           : null,
         cartItems,
         cartValue,
+        buyNowItem,
         cartUpdatedAt: cart?.updatedAt || null,
         createdAt: u.createdAt,
       };

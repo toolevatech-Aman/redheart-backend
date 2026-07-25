@@ -22,8 +22,12 @@ const cartItemSchema = new mongoose.Schema({
 
 const cartSchema = new mongoose.Schema(
   {
-    userId: { type: String, required: true, unique: true },
-    items:  { type: [cartItemSchema], default: [] },
+    userId:      { type: String, required: true, unique: true },
+    items:       { type: [cartItemSchema], default: [] },
+    // "Buy Now" bypasses the cart entirely (separate Redux slice on the frontend),
+    // so without this field that purchase intent was invisible in admin until an
+    // order was actually placed — no record at all if the shopper abandoned first.
+    buyNowItem:  { type: cartItemSchema, default: null },
   },
   { timestamps: true }
 );
