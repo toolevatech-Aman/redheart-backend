@@ -1,4 +1,6 @@
 import express from "express";
+import auth from "../middlewares/authMiddleware.js";
+import { isAdmin } from "../middlewares/isAdmin.js";
 import {
   createValentinePage,
   getValentinePage,
@@ -10,6 +12,7 @@ import {
   verifyMagicLink,
   getMyPages,
   sendAbandonmentEmails,
+  getAllValentineOrders,
 } from "../controllers/valentineController.js";
 
 const router = express.Router();
@@ -22,6 +25,7 @@ router.post("/magic-link",         sendMagicLink);
 router.post("/verify-magic-link",  verifyMagicLink);
 router.get("/my-pages",            getMyPages);
 router.post("/send-abandonment",   sendAbandonmentEmails);
+router.get("/admin/orders",        auth, isAdmin, getAllValentineOrders);
 router.get("/:slug",               getValentinePage);
 router.patch("/:slug/view",        trackView);
 router.post("/:slug/respond",      recordResponse);

@@ -21,6 +21,8 @@ import categoryConfigRoutes from './routes/categoryConfigRoutes.js';
 import valentineRoutes from './routes/valentineRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
 import cartRoutes from './routes/cartRoutes.js';
+import shayariSubmissionRoutes from './routes/shayariSubmissionRoutes.js';
+import subscriberRoutes from './routes/subscriberRoutes.js';
 import { razorpayWebhook, runAbandonmentEmails } from './controllers/valentineController.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
 const app = express();
@@ -69,6 +71,8 @@ app.use("/api/category-config", categoryConfigRoutes);
 app.use("/api/valentine",       valentineRoutes);
 app.use("/api/subscriptions",   subscriptionRoutes);
 app.use("/api/cart",            cartRoutes);
+app.use("/api/shayari-submissions", shayariSubmissionRoutes);
+app.use("/api/subscribers",     subscriberRoutes);
 
 // ── Sitemaps (public, no /api prefix) ────────────────────────────────────────
 app.get("/sitemap_cities.xml", citiesSitemap);

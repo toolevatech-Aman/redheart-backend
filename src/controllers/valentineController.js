@@ -527,3 +527,39 @@ export const razorpayWebhook = async (req, res) => {
     return res.status(500).json({ error: "Server error" });
   }
 };
+
+// ─── GET /api/valentine/admin/orders — admin: all paid surprise-page orders ──
+// Every occasion type (birthday, proposal, apology, …) is a ValentinePage doc
+// keyed by occasionKey; this was previously invisible everywhere in admin.
+export const getAllValentineOrders = async (req, res) => {
+  try {
+    const page  = Math.max(1, parseInt(req.query.page, 10)  || 1);
+    const limit = Math.min(100, parseInt(req.query.limit, 10) || 50);
+
+    const filter = { isPaid: true };
+    if (req.query.occasionKey) filter.occasionKey = req.query.occasionKey;
+
+    const [orders, total] = await Promise.all([
+      ValentinePage.find(filter)
+        .select(
+          "slug occasion occasionKey partnerName yourName recipientName tier " +
+          "amountPaid razorpayPaymentId razorpayOrderId giftId deliveryDate " +
+          "deliverySlot deliveryAddress deliveryPhone email whatsapp responded " +
+          "respondedAt createdAt updatedAt"
+        )
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      ValentinePage.countDocuments(filter),
+    ]);
+
+    res.json({
+      success: true,
+      data: orders,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

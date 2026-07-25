@@ -1,4 +1,5 @@
 import ConfidentialKey from "../models/confidentialKeys.js";
+import Subscriber from "../models/Subscriber.js";
 
 async function getRazorpayKeys() {
   const rows = await ConfidentialKey.find({
@@ -56,6 +57,19 @@ export async function createSubscription(req, res) {
     const sub = await subRes.json();
 
     if (sub.id) {
+      await Subscriber.findOneAndUpdate(
+        { phone },
+        {
+          $set: {
+            phone, type, plan: "premium_trial",
+            razorpayCustomerId: customerId || "",
+            razorpaySubscriptionId: sub.id,
+            subscriptionStatus: sub.status || "",
+          },
+          $setOnInsert: { subscribedAt: new Date() },
+        },
+        { upsert: true }
+      ).catch(() => {});
       return res.json({ subscription_id: sub.id, key: keyId });
     }
     if (sub.short_url) {
