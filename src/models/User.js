@@ -24,6 +24,13 @@ const couponSchema = new mongoose.Schema(
       required: true
     },
 
+    // Caps the discount amount for percentage coupons (e.g. NEW10 = 10% but
+    // never more than ₹120). Null/undefined = uncapped.
+    maxDiscount: {
+      type: Number,
+      default: null
+    },
+
     isUsed: {
       type: Boolean,
       default: false

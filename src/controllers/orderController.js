@@ -16,6 +16,31 @@ export const createOrder = async (req, res) => {
       const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw;
       orderData.deliveryDate = new Date(`${year}-${month}-${day}`);
     }
+
+    // Never trust the discount amount the client computed — recompute it
+    // server-side from the user's actual coupon record (incl. maxDiscount
+    // cap), or a tampered request could apply any discount it wants.
+    if (orderData.coupanApplied) {
+      const user = await User.findOne({ userId }).select("coupons").lean();
+      const coupon = user?.coupons?.find(
+        (c) => c.code?.toUpperCase() === orderData.coupanApplied.toUpperCase() && !c.isUsed
+      );
+      const subtotal = Number(orderData.totalProductPrice) || 0;
+
+      let discount = 0;
+      if (coupon && subtotal >= Number(coupon.minOrderValue || 0)) {
+        discount = coupon.discountType === "percentage"
+          ? (subtotal * Number(coupon.discountValue)) / 100
+          : Number(coupon.discountValue);
+        if (coupon.maxDiscount) discount = Math.min(discount, Number(coupon.maxDiscount));
+      }
+
+      orderData.coupanDiscount = discount;
+      orderData.totalPrice = (Number(orderData.totalProductPrice) || 0)
+        + (Number(orderData.totalShipmentPrice) || 0)
+        - discount;
+    }
+
     let razorpayOrder = null; // declare variable for response
 
     if (orderData.paymentMode === "PREPAID") {

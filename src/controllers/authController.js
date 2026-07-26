@@ -198,6 +198,7 @@ export const verifyOtp = async (req, res) => {
           discountType: "percentage",
           discountValue: 10,
           minOrderValue: 599,
+          maxDiscount: 120,
           isUsed: false
         },
         {
@@ -259,7 +260,7 @@ export const googleAuth = async (req, res) => {
 
     if (!user) {
       const defaultCoupons = [
-        { code: `NEW10`, discountType: "percentage", discountValue: 10, minOrderValue: 599, isUsed: false },
+        { code: `NEW10`, discountType: "percentage", discountValue: 10, minOrderValue: 599, maxDiscount: 120, isUsed: false },
         { code: `HAPPY100`, discountType: "flat", discountValue: 100, minOrderValue: 1000, isUsed: false },
       ];
       user = await User.create({
