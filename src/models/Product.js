@@ -48,9 +48,12 @@ const productSchema = new mongoose.Schema(
 
     customer_reviews: [
       {
-        rating: { type: Number },
-        review_date: { type: Date },
-        comment: { type: String },
+        userId:           { type: String },
+        name:             { type: String, default: "" },
+        rating:           { type: Number },
+        review_date:      { type: Date },
+        comment:          { type: String },
+        verifiedPurchase: { type: Boolean, default: false },
       },
     ],
 

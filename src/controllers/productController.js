@@ -242,19 +242,52 @@ export const getProductsByIds = async (req, res) => {
 };
 
 // Update review for a product
+// POST /products/:product_id/review — requires auth (see productRoutes.js).
+// One review per user per product: a repeat submission edits their existing
+// review in place rather than stacking duplicates.
 export const updateReview = async (req, res) => {
   try {
     const { product_id } = req.params;
     const { rating, comment } = req.body;
+    const userId = req.user.userId;
+
+    const ratingNum = Number(rating);
+    if (!ratingNum || ratingNum < 1 || ratingNum > 5) {
+      return res.status(400).json({ message: "Rating must be between 1 and 5" });
+    }
 
     const product = await Product.findOne({ product_id });
     if (!product) return res.status(404).json({ message: "Product not found" });
 
-    product.customer_reviews.push({
-      rating,
-      comment,
-      review_date: new Date()
-    });
+    const User = (await import("../models/User.js")).default;
+    const Order = (await import("../models/order.js")).default;
+
+    const user = await User.findOne({ userId }).select("name").lean();
+
+    // Verified purchase: any COD/PAID order by this user containing this product.
+    const purchaseOrder = await Order.findOne({
+      userId,
+      paymentStatus: { $in: ["COD", "PAID"] },
+      "cartItems.productId": { $in: [product_id, product._id.toString()] },
+    }).select("_id").lean();
+
+    const existing = product.customer_reviews.find((r) => r.userId === userId);
+    if (existing) {
+      existing.rating = ratingNum;
+      existing.comment = comment;
+      existing.review_date = new Date();
+      existing.verifiedPurchase = !!purchaseOrder;
+      if (user?.name) existing.name = user.name;
+    } else {
+      product.customer_reviews.push({
+        userId,
+        name: user?.name || "",
+        rating: ratingNum,
+        comment,
+        review_date: new Date(),
+        verifiedPurchase: !!purchaseOrder,
+      });
+    }
 
     // Recalculate metrics
     const totalRating = product.customer_reviews.reduce((acc, r) => acc + r.rating, 0);
@@ -263,7 +296,7 @@ export const updateReview = async (req, res) => {
 
     await product.save();
 
-    res.json({ message: "Review added", product });
+    res.json({ message: "Review saved", product });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

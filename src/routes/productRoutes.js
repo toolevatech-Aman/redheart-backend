@@ -28,7 +28,7 @@ router.post("/by-ids", getProductsByIds);            // Fetch multiple products 
 router.get("/for-page", getProductsForPage);        // Fetch all products for a page (admin sequencer)
 router.get("/slug/:slug", getProductBySlug);         // Full product details by slug (SEO)
 router.get("/:product_id", getProductById);          // Full product details by product_id
-router.post("/:product_id/review", updateReview);    // Add review
+router.post("/:product_id/review", auth, updateReview); // Add/edit review — must be logged in
 
 // Admin APIs
 router.post("/", auth, isAdmin, addProduct);
