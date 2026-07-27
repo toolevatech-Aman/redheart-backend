@@ -7,17 +7,34 @@ const PRODUCT_CATEGORY_SLUG = { Flowers: "flowers", Cakes: "cakes", Plants: "pla
 // ================= ADMIN: GET ALL USERS =================
 // Internal team accounts used for testing — excluded from the admin Users list
 // and from analytics so they don't skew real customer/order metrics.
-const TEST_ACCOUNT_EMAILS = [
+export const TEST_ACCOUNT_EMAILS = [
   "toolseva727@gmail.com",
   "amansinha1799@gmail.com",
   "amansinha727@gmail.com",
   "roshini5114@gmail.com",
   "mrinalraj4u@gmail.com",
+  "rishitrishna000@gmail.com",
+  "nernaykumar98@gmail.com",
+  "ankit.redhurt@gmail.com",
+  "rishisinha727@gmail.com",
+  "tooleva.tech@gmail.com",
+  "abhisheksuman2999@gmail.com",
 ];
+// Some test accounts have no email — matched by phone instead. Some phone
+// numbers are shared across multiple test accounts (re-used during testing).
+export const TEST_ACCOUNT_PHONES = [
+  "7903829867", "7011379018", "7632099577", "9217032776", "9142380521",
+  "8544357887", "7091603520", "6200600070", "6265040401", "6200830664",
+];
+const normalizePhone = (p) => (p || "").replace(/\D/g, "").slice(-10);
+export const isTestAccount = (u) =>
+  (u.email && TEST_ACCOUNT_EMAILS.includes(u.email.toLowerCase())) ||
+  (u.phone && TEST_ACCOUNT_PHONES.includes(normalizePhone(u.phone)));
 
 export const getAllUsersAdmin = async (req, res) => {
   try {
-    const users = await User.find({ email: { $nin: TEST_ACCOUNT_EMAILS } }).select('-tokens -coupons').sort({ createdAt: -1 }).lean();
+    const allUsers = await User.find({}).select('-tokens -coupons').sort({ createdAt: -1 }).lean();
+    const users = allUsers.filter((u) => !isTestAccount(u));
     const userIds = users.map(u => u.userId);
 
     // ── Order counts + last order per user ──────────────────────────────────
