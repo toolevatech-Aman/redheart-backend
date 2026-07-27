@@ -1,6 +1,7 @@
 import Order from '../models/order.js';
 import User from '../models/User.js';
 import { getRazorpayInstance } from '../services/razorpay.js';
+import { sendOrderAlertEmail } from '../utils/orderAlertMail.js';
 
 import { createHmac } from "crypto";
 
@@ -62,6 +63,7 @@ export const createOrder = async (req, res) => {
     }
     const order = new Order({ ...orderData, userId });
     await order.save();
+    sendOrderAlertEmail(order); // fire-and-forget, never blocks the response
    if (orderData.paymentMode === 'COD' && orderData.coupanApplied) {
   await User.updateOne(
     { userId, 'coupons.code': orderData.coupanApplied.toUpperCase() },
