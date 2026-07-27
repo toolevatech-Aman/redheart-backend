@@ -19,15 +19,16 @@ import { isAdmin } from "../middlewares/isAdmin.js";
 import { importProductsFromCSV } from "../controllers/productController.js";
 import { upload } from "../middlewares/upload.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
+import { cacheResponse } from "../middlewares/cacheMiddleware.js";
 const router = express.Router();
 
 // Public APIs
 router.get("/", getProducts);                        // Search/filter products
-router.get("/all-slugs", getAllProductSlugs);        // Lightweight list for sitemap
+router.get("/all-slugs", cacheResponse(300), getAllProductSlugs);        // Lightweight list for sitemap
 router.post("/by-ids", getProductsByIds);            // Fetch multiple products by _id array
 router.get("/for-page", getProductsForPage);        // Fetch all products for a page (admin sequencer)
-router.get("/slug/:slug", getProductBySlug);         // Full product details by slug (SEO)
-router.get("/:product_id", getProductById);          // Full product details by product_id
+router.get("/slug/:slug", cacheResponse(300), getProductBySlug);         // Full product details by slug (SEO)
+router.get("/:product_id", cacheResponse(300), getProductById);          // Full product details by product_id
 router.post("/:product_id/review", auth, updateReview); // Add/edit review — must be logged in
 
 // Admin APIs

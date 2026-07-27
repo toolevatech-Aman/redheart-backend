@@ -2,6 +2,7 @@
 import express from "express";
 import authMiddleware from "../middlewares/authMiddleware.js";
 import { isAdmin } from "../middlewares/isAdmin.js";
+import { cacheResponse } from "../middlewares/cacheMiddleware.js";
 import {
   listConfigs,
   getConfig,
@@ -16,8 +17,8 @@ const router = express.Router();
 const auth   = [authMiddleware, isAdmin];
 
 // Public
-router.get("/",     listConfigs);
-router.get("/:name", getConfig);
+router.get("/",     cacheResponse(300), listConfigs);
+router.get("/:name", cacheResponse(300), getConfig);
 
 // Admin-protected
 router.post("/",                      ...auth, createConfig);
