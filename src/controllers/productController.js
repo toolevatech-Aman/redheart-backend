@@ -178,7 +178,7 @@ export const getProductsForPage = async (req, res) => {
         { "product_attributes.available_cities": { $regex: new RegExp(`^${cityName.trim()}$`, "i") } },
       ];
       const products = await Product.find(q)
-        .select("_id product_id name slug sku selling_price media categorization")
+        .select("_id product_id name slug sku selling_price original_price media categorization variations")
         .lean();
       return res.json({ total: products.length, products });
     }
@@ -209,11 +209,11 @@ export const getProductsForPage = async (req, res) => {
       products = await Product.find({
         "categorization.category_name": { $in: ["Flowers", "Cakes", "Plants"] },
       })
-        .select("_id product_id name slug sku selling_price media categorization")
+        .select("_id product_id name slug sku selling_price original_price media categorization variations")
         .lean();
     } else {
       products = await Product.find(query)
-        .select("_id product_id name slug sku selling_price media categorization")
+        .select("_id product_id name slug sku selling_price original_price media categorization variations")
         .lean();
     }
 
