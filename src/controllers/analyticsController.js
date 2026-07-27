@@ -1,7 +1,18 @@
 import Order from "../models/order.js";
 import Product from "../models/Product.js";
+import User from "../models/User.js";
 
 const PAID_STATUSES = ["COD", "PAID"];
+
+// Internal team accounts used for testing — excluded so their test orders
+// don't skew new/repeat customer counts, repeat rate, or M1 retention.
+const TEST_ACCOUNT_EMAILS = [
+  "toolseva727@gmail.com",
+  "amansinha1799@gmail.com",
+  "amansinha727@gmail.com",
+  "roshini5114@gmail.com",
+  "mrinalraj4u@gmail.com",
+];
 
 const RANGE_DAYS = { "7d": 7, "30d": 30, "90d": 90, all: null };
 
@@ -60,9 +71,15 @@ export const getDashboard = async (req, res) => {
     const range = RANGE_DAYS[req.query.range] !== undefined ? req.query.range : "30d";
     const from = rangeStart(range);
 
+    const testUsers = await User.find({ email: { $in: TEST_ACCOUNT_EMAILS } }).select("userId").lean();
+    const testUserIds = testUsers.map((u) => u.userId);
+
     // Pull full lifetime order history once -- needed for new/repeat + cohort
     // classification, which can't be determined by looking at the range alone.
-    const allOrders = await Order.find({ paymentStatus: { $in: PAID_STATUSES } })
+    const allOrders = await Order.find({
+      paymentStatus: { $in: PAID_STATUSES },
+      ...(testUserIds.length ? { userId: { $nin: testUserIds } } : {}),
+    })
       .select("userId orderId totalPrice orderStatus createdAt shippingAddress.city cartItems")
       .sort({ createdAt: 1 })
       .lean();

@@ -5,9 +5,19 @@ import Cart from "../models/Cart.js";
 const PRODUCT_CATEGORY_SLUG = { Flowers: "flowers", Cakes: "cakes", Plants: "plants" };
 
 // ================= ADMIN: GET ALL USERS =================
+// Internal team accounts used for testing — excluded from the admin Users list
+// and from analytics so they don't skew real customer/order metrics.
+const TEST_ACCOUNT_EMAILS = [
+  "toolseva727@gmail.com",
+  "amansinha1799@gmail.com",
+  "amansinha727@gmail.com",
+  "roshini5114@gmail.com",
+  "mrinalraj4u@gmail.com",
+];
+
 export const getAllUsersAdmin = async (req, res) => {
   try {
-    const users = await User.find({}).select('-tokens -coupons').sort({ createdAt: -1 }).lean();
+    const users = await User.find({ email: { $nin: TEST_ACCOUNT_EMAILS } }).select('-tokens -coupons').sort({ createdAt: -1 }).lean();
     const userIds = users.map(u => u.userId);
 
     // ── Order counts + last order per user ──────────────────────────────────
