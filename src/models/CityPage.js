@@ -35,6 +35,9 @@ const cityPageSchema = new mongoose.Schema(
     cityName:         { type: String, required: true },
     slug:             { type: String, required: true },
     url:              { type: String, required: true },
+    // Indian state this city belongs to — powers real geographic "nearby
+    // cities" interlinking (as opposed to a fixed popular-metros fallback).
+    state:            { type: String, default: "" },
     metaTitle:        { type: String, default: "" },
     metaDescription:  { type: String, default: "" },
     h1:               { type: String, default: "" },

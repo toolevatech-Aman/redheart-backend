@@ -493,7 +493,7 @@ export async function regenerateCities(req, res) {
 export async function getAllCitySlugs(req, res) {
   try {
     const cities = await CityPage.find({ isActive: true })
-      .select("url updatedAt")
+      .select("url updatedAt category slug cityName state")
       .lean();
     res.json(cities);
   } catch (err) {
