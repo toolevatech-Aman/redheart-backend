@@ -26,6 +26,7 @@ import subscriberRoutes from './routes/subscriberRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import { razorpayWebhook, runAbandonmentEmails } from './controllers/valentineController.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
+import { runDailyIndexNowSubmit } from './utils/dailyIndexNowSubmit.js';
 const app = express();
 
 // Razorpay webhook — must receive raw body BEFORE express.json parses it
@@ -98,3 +99,12 @@ setTimeout(() => {
     runAbandonmentEmails().then(r => console.log("[abandonment]", r)).catch(() => {});
   }, 60 * 60 * 1000);
 }, 5 * 60 * 1000);
+
+// Daily IndexNow rotation — pushes the next 100 sitemap URLs to Bing each day,
+// cycling through the full sitemap so every page gets periodically re-submitted.
+setTimeout(() => {
+  runDailyIndexNowSubmit().then(r => console.log("[indexnow-daily]", r)).catch(err => console.error("[indexnow-daily]", err.message));
+  setInterval(() => {
+    runDailyIndexNowSubmit().then(r => console.log("[indexnow-daily]", r)).catch(err => console.error("[indexnow-daily]", err.message));
+  }, 24 * 60 * 60 * 1000);
+}, 10 * 60 * 1000);

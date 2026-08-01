@@ -1,5 +1,6 @@
 import CityPage from "../models/CityPage.js";
 import { revalidateTags } from "../utils/revalidate.js";
+import { submitToIndexNow } from "../utils/indexNow.js";
 
 // ── Utility helpers ───────────────────────────────────────────────────────────
 
@@ -375,6 +376,7 @@ export async function addCitiesBulk(req, res) {
     }
 
     const added   = [];
+    const addedUrls = [];
     const skipped = [];
     const errors  = [];
 
@@ -386,6 +388,7 @@ export async function addCitiesBulk(req, res) {
         const data = generateCityData(category, name);
         await CityPage.create(data);
         added.push(data.cityName);
+        if (data.url) addedUrls.push(`https://www.redheart.in${data.url}`);
       } catch (err) {
         if (err.code === 11000) {
           skipped.push(toProperCase(name));
@@ -395,6 +398,7 @@ export async function addCitiesBulk(req, res) {
       }
     }
 
+    submitToIndexNow(addedUrls);
     return res.json({ added, skipped, errors });
   } catch (err) {
     console.error("addCitiesBulk error:", err);
@@ -548,6 +552,7 @@ export async function upsertCityContent(req, res) {
       { $set: setData },
       { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
     );
+    if (doc?.url) submitToIndexNow(`https://www.redheart.in${doc.url}`);
     return res.json(doc);
   } catch (err) {
     console.error("upsertCityContent error:", err);
