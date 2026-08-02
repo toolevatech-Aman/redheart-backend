@@ -76,7 +76,8 @@ const orderSchema = new mongoose.Schema({
     assignedAt: { type: Date, default: null },
     deliveryNotes: { type: String, default: "" },
     internalRating: { type: Number, min: 1, max: 5, default: null },
-    statCounted: { type: Boolean, default: false }, // guards against double-counting vendor stats
+    statCounted: { type: Boolean, default: false },    // guards order-count stats (totalOrders/successRate)
+    revenueCounted: { type: Boolean, default: false },  // guards cost/revenue stats, settleable later than statCounted
   },
 
   // Per-product assignment — used instead of `vendor` when different items in
@@ -91,6 +92,7 @@ const orderSchema = new mongoose.Schema({
     assignedAt: { type: Date, default: null },
     deliveryNotes: { type: String, default: "" },
     statCounted: { type: Boolean, default: false },
+    revenueCounted: { type: Boolean, default: false },
   }],
 }, { timestamps: true });
 

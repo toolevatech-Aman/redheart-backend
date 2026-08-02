@@ -153,6 +153,19 @@ export const recommendVendors = async (req, res) => {
 
 // ── Assignment ────────────────────────────────────────────────────────────
 
+// A vendor's coverage grows from actual usage — every order they're assigned
+// to teaches the recommendation engine one more place they deliver, so a
+// generic vendor (a local courier, an aggregator like Blinkit) doesn't need
+// its whole service area entered by hand up front.
+async function expandVendorCoverage(vendor, order) {
+  const pinCode = order.shippingAddress?.postalCode ? String(order.shippingAddress.postalCode).trim() : null;
+  const region = order.shippingAddress?.state ? norm(order.shippingAddress.state) : null;
+  const update = {};
+  if (pinCode && !vendor.pinCodes.includes(pinCode)) update.$addToSet = { ...(update.$addToSet || {}), pinCodes: pinCode };
+  if (region && !vendor.regions.includes(region)) update.$addToSet = { ...(update.$addToSet || {}), regions: region };
+  if (Object.keys(update).length) await Vendor.updateOne({ _id: vendor._id }, update);
+}
+
 export const assignVendorToOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -175,11 +188,14 @@ export const assignVendorToOrder = async (req, res) => {
           deliveryNotes: deliveryNotes || "",
           internalRating: null,
           statCounted: false,
+          revenueCounted: false,
         },
       },
       { new: true }
     );
     if (!order) return res.status(404).json({ message: "Order not found" });
+
+    await expandVendorCoverage(vendor, order);
 
     // Order was already Delivered/Cancelled before a vendor got attached (the
     // common case when backfilling vendors onto historical orders) — the
@@ -219,15 +235,125 @@ export const assignVendorToOrderItem = async (req, res) => {
       assignedAt: new Date(),
       deliveryNotes: deliveryNotes || "",
       statCounted: false,
+      revenueCounted: false,
     };
     const idx = order.itemVendors.findIndex((iv) => iv.cartItemId === cartItemId);
     if (idx >= 0) order.itemVendors[idx] = entry;
     else order.itemVendors.push(entry);
     await order.save();
 
+    await expandVendorCoverage(vendor, order);
+
     if (["Delivered", "Cancelled"].includes(order.orderStatus)) {
       await recordItemVendorOutcomes(order);
     }
+
+    res.json(order);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Add/edit the cost on an ALREADY-assigned vendor without touching who's
+// assigned — for orders where the vendor was attached before a cost was
+// known (e.g. backfilled history), or where the quoted cost needs revising.
+// Order-count stats (statCounted) are untouched; only cost/revenue move,
+// gated by their own revenueCounted flag so this is safe to call repeatedly.
+export const updateOrderVendorCost = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { cost, deliveryCost } = req.body;
+
+    const order = await Order.findOne({ orderId });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    if (!order.vendor?.vendorId) return res.status(400).json({ message: "No vendor assigned to this order yet" });
+
+    const vendor = await Vendor.findById(order.vendor.vendorId);
+    if (!vendor) return res.status(404).json({ message: "Vendor not found" });
+
+    const oldCost = Number(order.vendor.cost || 0);
+    const oldDeliveryCost = Number(order.vendor.deliveryCost || 0);
+    const newCost = cost !== undefined ? Number(cost) : oldCost;
+    const newDeliveryCost = deliveryCost !== undefined ? Number(deliveryCost) : oldDeliveryCost;
+    const wasRevenueCounted = !!order.vendor.revenueCounted;
+
+    if (order.orderStatus === "Delivered") {
+      vendor.stats.totalCost += newCost - oldCost;
+      if (!wasRevenueCounted) {
+        vendor.stats.totalRevenue += Number(order.totalPrice || 0);
+        order.vendor.revenueCounted = true;
+      }
+      vendor.stats.avgCost = vendor.stats.deliveredOrders > 0
+        ? Math.round(vendor.stats.totalCost / vendor.stats.deliveredOrders)
+        : vendor.stats.avgCost;
+      vendor.stats.margin = vendor.stats.totalRevenue - vendor.stats.totalCost;
+      await vendor.save();
+
+      // First contribution → count it as a new pin-code data point; a later
+      // edit to an already-counted cost only shifts the totals.
+      await applyPinCodeStat(order.shippingAddress?.postalCode, {
+        cost: newCost - oldCost,
+        deliveryCost: newDeliveryCost - oldDeliveryCost,
+      }, !wasRevenueCounted);
+    }
+
+    order.vendor.cost = newCost;
+    order.vendor.deliveryCost = newDeliveryCost;
+    await order.save();
+
+    res.json(order);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Same as updateOrderVendorCost, for one item in a split (itemVendors) order.
+export const updateOrderItemVendorCost = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { cartItemId, cost, deliveryCost } = req.body;
+    if (!cartItemId) return res.status(400).json({ message: "cartItemId is required" });
+
+    const order = await Order.findOne({ orderId });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    const iv = order.itemVendors.find((x) => x.cartItemId === cartItemId);
+    if (!iv?.vendorId) return res.status(400).json({ message: "No vendor assigned to this item yet" });
+
+    const vendor = await Vendor.findById(iv.vendorId);
+    if (!vendor) return res.status(404).json({ message: "Vendor not found" });
+
+    const oldCost = Number(iv.cost || 0);
+    const oldDeliveryCost = Number(iv.deliveryCost || 0);
+    const newCost = cost !== undefined ? Number(cost) : oldCost;
+    const newDeliveryCost = deliveryCost !== undefined ? Number(deliveryCost) : oldDeliveryCost;
+
+    const wasRevenueCounted = !!iv.revenueCounted;
+
+    if (order.orderStatus === "Delivered") {
+      const item = (order.cartItems || []).find((ci) => String(ci._id) === cartItemId);
+      const revenue = item ? Number(item.selling_price || 0) * Number(item.quantity || 1) : 0;
+
+      vendor.stats.totalCost += newCost - oldCost;
+      if (!wasRevenueCounted) {
+        vendor.stats.totalRevenue += revenue;
+        iv.revenueCounted = true;
+      }
+      vendor.stats.avgCost = vendor.stats.deliveredOrders > 0
+        ? Math.round(vendor.stats.totalCost / vendor.stats.deliveredOrders)
+        : vendor.stats.avgCost;
+      vendor.stats.margin = vendor.stats.totalRevenue - vendor.stats.totalCost;
+      await vendor.save();
+
+      await applyPinCodeStat(order.shippingAddress?.postalCode, {
+        cost: newCost - oldCost,
+        deliveryCost: newDeliveryCost - oldDeliveryCost,
+      }, !wasRevenueCounted);
+    }
+
+    iv.cost = newCost;
+    iv.deliveryCost = newDeliveryCost;
+    await order.save();
 
     res.json(order);
   } catch (err) {
@@ -260,11 +386,14 @@ async function applyVendorStats(vendor, { isDelivered, isCancelled, cost, delive
   await vendor.save();
 }
 
-async function applyPinCodeStat(pinCode, { cost, deliveryCost }) {
+// isNewDataPoint=true (the normal delivery-time path) increments orderCount;
+// false (editing a cost that was already contributed once) only shifts the
+// totals — otherwise every cost edit would inflate the pin code's sample size.
+async function applyPinCodeStat(pinCode, { cost, deliveryCost }, isNewDataPoint = true) {
   if (!pinCode) return;
   const inc = {};
-  if (cost) { inc.totalCost = Number(cost); inc.orderCount = 1; }
-  if (deliveryCost) { inc.totalDeliveryCost = Number(deliveryCost); inc.deliveryOrderCount = 1; }
+  if (cost) { inc.totalCost = Number(cost); if (isNewDataPoint) inc.orderCount = 1; }
+  if (deliveryCost) { inc.totalDeliveryCost = Number(deliveryCost); if (isNewDataPoint) inc.deliveryOrderCount = 1; }
   if (!Object.keys(inc).length) return;
 
   const stat = await PinCodeStat.findOneAndUpdate(
@@ -301,9 +430,10 @@ export async function recordVendorOutcome(order) {
     revenue: order.totalPrice,
   });
 
-  await Order.updateOne({ _id: order._id }, { "vendor.statCounted": true });
+  const revenueCounted = isDelivered && !!order.vendor.cost;
+  await Order.updateOne({ _id: order._id }, { "vendor.statCounted": true, "vendor.revenueCounted": revenueCounted });
 
-  if (isDelivered) {
+  if (revenueCounted) {
     await applyPinCodeStat(order.shippingAddress?.postalCode, {
       cost: order.vendor.cost, deliveryCost: order.vendor.deliveryCost,
     });
@@ -333,11 +463,13 @@ export async function recordItemVendorOutcomes(order) {
       revenue,
     });
 
-    if (isDelivered) {
+    const revenueCounted = isDelivered && !!iv.cost;
+    if (revenueCounted) {
       await applyPinCodeStat(order.shippingAddress?.postalCode, { cost: iv.cost, deliveryCost: iv.deliveryCost });
     }
 
     iv.statCounted = true;
+    iv.revenueCounted = revenueCounted;
     changed = true;
   }
   if (changed) await Order.updateOne({ _id: order._id }, { itemVendors: order.itemVendors });
