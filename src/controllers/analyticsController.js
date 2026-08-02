@@ -1,6 +1,7 @@
 import Order from "../models/order.js";
 import Product from "../models/Product.js";
 import User from "../models/User.js";
+import Vendor from "../models/Vendor.js";
 import { isTestAccount } from "./userController.js";
 
 const PAID_STATUSES = ["COD", "PAID"];
@@ -57,6 +58,152 @@ function dayKey(date) {
  *
  * Category/City/Revenue-trend/Order-status/Top-products ARE range-scoped.
  */
+/**
+ * GET /api/analytics/margin?range=7d|30d|90d|all
+ *
+ * Margin = revenue (order/item selling price) − vendor cost, for orders that
+ * are actually Delivered with a vendor cost recorded. Orders without a
+ * vendor/cost yet are excluded rather than treated as zero-cost, since that
+ * would overstate margin — "uncosted" orders/revenue are reported separately
+ * so the gap in data is visible, not silently assumed to be pure profit.
+ *
+ * Whole-order vendor cost is split across categories in proportion to each
+ * category's share of that order's revenue (cost isn't itemized in that
+ * mode); per-item (split) assignments already have an exact per-item cost.
+ * Location margin always uses the order's shipping city — one value per
+ * order regardless of how many categories/vendors are inside it.
+ */
+export const getMarginAnalytics = async (req, res) => {
+  try {
+    const range = RANGE_DAYS[req.query.range] !== undefined ? req.query.range : "30d";
+    const from = rangeStart(range);
+
+    const filter = { orderStatus: "Delivered" };
+    if (from) filter.createdAt = { $gte: from };
+
+    const orders = await Order.find(filter)
+      .select("orderId totalPrice cartItems vendor itemVendors shippingAddress.city createdAt")
+      .lean();
+
+    // ── Resolve category per product, same join pattern as getDashboard ──────
+    const pidSet = new Set();
+    for (const o of orders) (o.cartItems || []).forEach((ci) => ci.productId && pidSet.add(String(ci.productId)));
+    const pids = [...pidSet];
+    const objectIds = pids.filter((id) => /^[0-9a-fA-F]{24}$/.test(id));
+    const products = await Product.find({
+      $or: [
+        { _id: { $in: objectIds } },
+        { product_id: { $in: pids } },
+        { "variants._id": { $in: objectIds } },
+      ],
+    }).select("product_id categorization.category_name variants._id").lean();
+
+    const categoryByPid = {};
+    for (const p of products) {
+      const cat = p.categorization?.category_name || "Uncategorized";
+      categoryByPid[String(p._id)] = cat;
+      if (p.product_id) categoryByPid[p.product_id] = cat;
+      (p.variants || []).forEach((v) => { categoryByPid[String(v._id)] = cat; });
+    }
+
+    let totalRevenue = 0, totalCost = 0, costedOrders = 0;
+    let uncostedOrders = 0, uncostedRevenue = 0;
+    const categoryMap = new Map();  // category -> { revenue, cost }
+    const locationMap = new Map();  // city -> { revenue, cost, orders }
+
+    const addTo = (map, key, revenue, cost) => {
+      const cur = map.get(key) || { revenue: 0, cost: 0, orders: 0 };
+      cur.revenue += revenue;
+      cur.cost += cost;
+      cur.orders += 1;
+      map.set(key, cur);
+    };
+
+    for (const o of orders) {
+      const city = (o.shippingAddress?.city || "Unknown").trim();
+      const hasWholeVendorCost = o.vendor?.vendorId && o.vendor.cost;
+      const itemsWithCost = (o.itemVendors || []).filter((iv) => iv.vendorId && iv.cost);
+
+      if (!hasWholeVendorCost && !itemsWithCost.length) {
+        uncostedOrders += 1;
+        uncostedRevenue += o.totalPrice || 0;
+        continue;
+      }
+
+      costedOrders += 1;
+
+      if (hasWholeVendorCost) {
+        const orderRevenue = o.totalPrice || 0;
+        const orderCost = Number(o.vendor.cost);
+        totalRevenue += orderRevenue;
+        totalCost += orderCost;
+        addTo(locationMap, city, orderRevenue, orderCost);
+
+        // Split cost across categories proportional to each category's revenue share
+        const catRevenue = new Map();
+        for (const ci of o.cartItems || []) {
+          const cat = categoryByPid[String(ci.productId)] || "Uncategorized";
+          catRevenue.set(cat, (catRevenue.get(cat) || 0) + (ci.selling_price || 0) * (ci.quantity || 1));
+        }
+        const lineTotal = [...catRevenue.values()].reduce((s, v) => s + v, 0) || orderRevenue;
+        for (const [cat, rev] of catRevenue.entries()) {
+          const share = lineTotal > 0 ? rev / lineTotal : 0;
+          addTo(categoryMap, cat, rev, orderCost * share);
+        }
+      }
+
+      for (const iv of itemsWithCost) {
+        const item = (o.cartItems || []).find((ci) => String(ci._id) === iv.cartItemId);
+        if (!item) continue;
+        const revenue = (item.selling_price || 0) * (item.quantity || 1);
+        const cost = Number(iv.cost);
+        const cat = categoryByPid[String(item.productId)] || "Uncategorized";
+        totalRevenue += revenue;
+        totalCost += cost;
+        addTo(categoryMap, cat, revenue, cost);
+        addTo(locationMap, city, revenue, cost);
+      }
+    }
+
+    const marginByCategory = [...categoryMap.entries()]
+      .map(([category, v]) => ({ category, revenue: v.revenue, cost: v.cost, margin: v.revenue - v.cost, marginPercent: v.revenue ? ((v.revenue - v.cost) / v.revenue) * 100 : 0 }))
+      .sort((a, b) => b.margin - a.margin);
+
+    const marginByLocation = [...locationMap.entries()]
+      .map(([city, v]) => ({ city, orders: v.orders, revenue: v.revenue, cost: v.cost, margin: v.revenue - v.cost, marginPercent: v.revenue ? ((v.revenue - v.cost) / v.revenue) * 100 : 0 }))
+      .sort((a, b) => b.margin - a.margin)
+      .slice(0, 20);
+
+    const topVendorsByMargin = await Vendor.find({ "stats.totalOrders": { $gt: 0 } })
+      .select("name city stats")
+      .sort({ "stats.margin": -1 })
+      .limit(10)
+      .lean();
+
+    res.json({
+      success: true,
+      range,
+      summary: {
+        totalRevenue, totalCost,
+        totalMargin: totalRevenue - totalCost,
+        marginPercent: totalRevenue ? ((totalRevenue - totalCost) / totalRevenue) * 100 : 0,
+        costedOrders, uncostedOrders, uncostedRevenue,
+      },
+      marginByCategory,
+      marginByLocation,
+      topVendorsByMargin: topVendorsByMargin.map((v) => ({
+        name: v.name, city: v.city,
+        totalOrders: v.stats.totalOrders, totalRevenue: v.stats.totalRevenue,
+        totalCost: v.stats.totalCost, margin: v.stats.margin,
+        marginPercent: v.stats.totalRevenue ? (v.stats.margin / v.stats.totalRevenue) * 100 : 0,
+      })),
+    });
+  } catch (err) {
+    console.error("margin analytics error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 export const getDashboard = async (req, res) => {
   try {
     const range = RANGE_DAYS[req.query.range] !== undefined ? req.query.range : "30d";
