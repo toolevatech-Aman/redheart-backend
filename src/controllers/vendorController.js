@@ -79,9 +79,12 @@ export const getVendorProfile = async (req, res) => {
     const vendor = await Vendor.findById(req.params.id);
     if (!vendor) return res.status(404).json({ message: "Vendor not found" });
 
-    const orders = await Order.find({ "vendor.vendorId": vendor._id })
+    // Match orders where this vendor has the whole order OR just some items in it
+    const orders = await Order.find({
+      $or: [{ "vendor.vendorId": vendor._id }, { "itemVendors.vendorId": vendor._id }],
+    })
       .sort({ createdAt: -1 })
-      .select("orderId cartItems totalPrice vendor orderStatus createdAt shippingAddress");
+      .select("orderId cartItems totalPrice vendor itemVendors orderStatus createdAt shippingAddress");
 
     res.json({ vendor, orders });
   } catch (err) {
@@ -153,7 +156,7 @@ export const recommendVendors = async (req, res) => {
 export const assignVendorToOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { vendorId, cost, deliveryNotes } = req.body;
+    const { vendorId, cost, deliveryCost, deliveryNotes } = req.body;
     if (!vendorId) return res.status(400).json({ message: "vendorId is required" });
 
     const vendor = await Vendor.findById(vendorId);
@@ -167,6 +170,7 @@ export const assignVendorToOrder = async (req, res) => {
           name: vendor.name,
           phone: vendor.phone,
           cost: cost ?? null,
+          deliveryCost: deliveryCost ?? null,
           assignedAt: new Date(),
           deliveryNotes: deliveryNotes || "",
           internalRating: null,
@@ -191,6 +195,90 @@ export const assignVendorToOrder = async (req, res) => {
   }
 };
 
+// Per-product assignment — different items in the same order can go to
+// different vendors. Upserts one entry in order.itemVendors by cartItemId.
+export const assignVendorToOrderItem = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { cartItemId, vendorId, cost, deliveryCost, deliveryNotes } = req.body;
+    if (!cartItemId || !vendorId) return res.status(400).json({ message: "cartItemId and vendorId are required" });
+
+    const vendor = await Vendor.findById(vendorId);
+    if (!vendor) return res.status(404).json({ message: "Vendor not found" });
+
+    const order = await Order.findOne({ orderId });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    const entry = {
+      cartItemId,
+      vendorId: vendor._id,
+      name: vendor.name,
+      phone: vendor.phone,
+      cost: cost ?? null,
+      deliveryCost: deliveryCost ?? null,
+      assignedAt: new Date(),
+      deliveryNotes: deliveryNotes || "",
+      statCounted: false,
+    };
+    const idx = order.itemVendors.findIndex((iv) => iv.cartItemId === cartItemId);
+    if (idx >= 0) order.itemVendors[idx] = entry;
+    else order.itemVendors.push(entry);
+    await order.save();
+
+    if (["Delivered", "Cancelled"].includes(order.orderStatus)) {
+      await recordItemVendorOutcomes(order);
+    }
+
+    res.json(order);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Standard flat shipping fee customers already pay — anything a vendor
+// charges above this, on average for a pin code, is flagged as an
+// under-recovered delivery cost so checkout can surcharge future orders there.
+const BASELINE_SHIPPING_FEE = 49;
+
+async function applyVendorStats(vendor, { isDelivered, isCancelled, cost, deliveryCost, revenue }) {
+  vendor.stats.totalOrders += 1;
+  if (isDelivered) vendor.stats.deliveredOrders += 1;
+  if (isCancelled) vendor.stats.cancelledOrders += 1;
+  if (isDelivered && cost) {
+    vendor.stats.totalCost += Number(cost); // total settlement paid to vendor
+    vendor.stats.totalRevenue += Number(revenue || 0); // what RedHeart earned
+  }
+  vendor.stats.avgCost = vendor.stats.deliveredOrders > 0
+    ? Math.round(vendor.stats.totalCost / vendor.stats.deliveredOrders)
+    : vendor.stats.avgCost;
+  vendor.stats.margin = vendor.stats.totalRevenue - vendor.stats.totalCost;
+  vendor.stats.successRate = vendor.stats.totalOrders > 0
+    ? Math.round((vendor.stats.deliveredOrders / vendor.stats.totalOrders) * 100)
+    : 0;
+  vendor.stats.lastOrderAt = new Date();
+  await vendor.save();
+}
+
+async function applyPinCodeStat(pinCode, { cost, deliveryCost }) {
+  if (!pinCode) return;
+  const inc = {};
+  if (cost) { inc.totalCost = Number(cost); inc.orderCount = 1; }
+  if (deliveryCost) { inc.totalDeliveryCost = Number(deliveryCost); inc.deliveryOrderCount = 1; }
+  if (!Object.keys(inc).length) return;
+
+  const stat = await PinCodeStat.findOneAndUpdate(
+    { pinCode: String(pinCode).trim() },
+    { $inc: inc },
+    { upsert: true, new: true }
+  );
+  if (stat.orderCount > 0) stat.avgCost = Math.round(stat.totalCost / stat.orderCount);
+  if (stat.deliveryOrderCount > 0) {
+    stat.avgDeliveryCost = Math.round(stat.totalDeliveryCost / stat.deliveryOrderCount);
+    stat.extraDeliveryFee = Math.max(0, stat.avgDeliveryCost - BASELINE_SHIPPING_FEE);
+  }
+  await stat.save();
+}
+
 // Called from orderController.updateOrderStatus when status settles into
 // Delivered/Cancelled — rolls the outcome into the vendor's running stats.
 export async function recordVendorOutcome(order) {
@@ -202,36 +290,52 @@ export async function recordVendorOutcome(order) {
   const vendor = await Vendor.findById(order.vendor.vendorId);
   if (!vendor) return;
 
-  vendor.stats.totalOrders += 1;
-  if (isDelivered) vendor.stats.deliveredOrders += 1;
-  if (isCancelled) vendor.stats.cancelledOrders += 1;
-  if (isDelivered && order.vendor.cost) {
-    vendor.stats.totalCost += Number(order.vendor.cost); // total settlement paid to vendor
-    vendor.stats.totalRevenue += Number(order.totalPrice || 0); // what RedHeart earned on this order
-  }
-  vendor.stats.avgCost = vendor.stats.deliveredOrders > 0
-    ? Math.round(vendor.stats.totalCost / vendor.stats.deliveredOrders)
-    : vendor.stats.avgCost;
-  vendor.stats.margin = vendor.stats.totalRevenue - vendor.stats.totalCost;
-  vendor.stats.successRate = vendor.stats.totalOrders > 0
-    ? Math.round((vendor.stats.deliveredOrders / vendor.stats.totalOrders) * 100)
-    : 0;
-  vendor.stats.lastOrderAt = new Date();
-  await vendor.save();
+  await applyVendorStats(vendor, {
+    isDelivered, isCancelled,
+    cost: order.vendor.cost, deliveryCost: order.vendor.deliveryCost,
+    revenue: order.totalPrice,
+  });
 
   await Order.updateOne({ _id: order._id }, { "vendor.statCounted": true });
 
-  // Cross-vendor delivery-cost benchmark for this pin code
-  const pinCode = order.shippingAddress?.postalCode;
-  if (isDelivered && pinCode && order.vendor.cost) {
-    const stat = await PinCodeStat.findOneAndUpdate(
-      { pinCode: String(pinCode).trim() },
-      { $inc: { totalCost: Number(order.vendor.cost), orderCount: 1 } },
-      { upsert: true, new: true }
-    );
-    stat.avgCost = Math.round(stat.totalCost / stat.orderCount);
-    await stat.save();
+  if (isDelivered) {
+    await applyPinCodeStat(order.shippingAddress?.postalCode, {
+      cost: order.vendor.cost, deliveryCost: order.vendor.deliveryCost,
+    });
   }
+}
+
+// Same as recordVendorOutcome but for per-product (itemVendors) assignment —
+// each item's revenue is its own selling_price × quantity, not the whole order.
+export async function recordItemVendorOutcomes(order) {
+  if (!order?.itemVendors?.length) return;
+  const isDelivered = order.orderStatus === "Delivered";
+  const isCancelled = order.orderStatus === "Cancelled";
+  if (!isDelivered && !isCancelled) return;
+
+  let changed = false;
+  for (const iv of order.itemVendors) {
+    if (!iv.vendorId || iv.statCounted) continue;
+    const vendor = await Vendor.findById(iv.vendorId);
+    if (!vendor) continue;
+
+    const item = (order.cartItems || []).find((ci) => String(ci._id) === iv.cartItemId);
+    const revenue = item ? Number(item.selling_price || 0) * Number(item.quantity || 1) : 0;
+
+    await applyVendorStats(vendor, {
+      isDelivered, isCancelled,
+      cost: iv.cost, deliveryCost: iv.deliveryCost,
+      revenue,
+    });
+
+    if (isDelivered) {
+      await applyPinCodeStat(order.shippingAddress?.postalCode, { cost: iv.cost, deliveryCost: iv.deliveryCost });
+    }
+
+    iv.statCounted = true;
+    changed = true;
+  }
+  if (changed) await Order.updateOne({ _id: order._id }, { itemVendors: order.itemVendors });
 }
 
 export const getPinCodeStat = async (req, res) => {
@@ -239,7 +343,10 @@ export const getPinCodeStat = async (req, res) => {
     const { pinCode } = req.query;
     if (!pinCode) return res.status(400).json({ message: "pinCode is required" });
     const stat = await PinCodeStat.findOne({ pinCode: String(pinCode).trim() });
-    res.json(stat || { pinCode, totalCost: 0, orderCount: 0, avgCost: 0 });
+    res.json(stat || {
+      pinCode, totalCost: 0, orderCount: 0, avgCost: 0,
+      totalDeliveryCost: 0, deliveryOrderCount: 0, avgDeliveryCost: 0, extraDeliveryFee: 0,
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

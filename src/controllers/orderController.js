@@ -2,7 +2,7 @@ import Order from '../models/order.js';
 import User from '../models/User.js';
 import { getRazorpayInstance } from '../services/razorpay.js';
 import { sendOrderAlertEmail } from '../utils/orderAlertMail.js';
-import { recordVendorOutcome } from './vendorController.js';
+import { recordVendorOutcome, recordItemVendorOutcomes } from './vendorController.js';
 
 import { createHmac } from "crypto";
 
@@ -284,6 +284,7 @@ export const updateOrderStatus = async (req, res) => {
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
     recordVendorOutcome(order).catch((err) => console.error("recordVendorOutcome failed:", err.message));
+    recordItemVendorOutcomes(order).catch((err) => console.error("recordItemVendorOutcomes failed:", err.message));
 
     res.status(200).json({ success: true, message: 'Order status updated', data: order });
   } catch (error) {

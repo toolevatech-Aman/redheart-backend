@@ -5,9 +5,15 @@ import mongoose from "mongoose";
 const pinCodeStatSchema = new mongoose.Schema(
   {
     pinCode: { type: String, required: true, unique: true, trim: true },
-    totalCost: { type: Number, default: 0 },
+    totalCost: { type: Number, default: 0 },     // total vendor cost (product + delivery) seen for this pin code
     orderCount: { type: Number, default: 0 },
     avgCost: { type: Number, default: 0 },
+
+    // ── Delivery-only tracking — feeds the checkout extra-delivery-fee flag ──
+    totalDeliveryCost: { type: Number, default: 0 },
+    deliveryOrderCount: { type: Number, default: 0 },
+    avgDeliveryCost: { type: Number, default: 0 },
+    extraDeliveryFee: { type: Number, default: 0 }, // max(0, avgDeliveryCost - standard shipping charge)
   },
   { timestamps: true }
 );

@@ -66,16 +66,32 @@ const orderSchema = new mongoose.Schema({
   orderStatus: { type: String, default: 'Pending' }, // Pending, Processing, Shipped, Delivered, Cancelled
 
   // ── Vendor assignment (manual, via ops) ──────────────────────────────────
+  // Whole-order assignment — one vendor delivers everything in the order.
   vendor: {
     vendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor", default: null },
     name: { type: String, default: "" },
     phone: { type: String, default: "" },
-    cost: { type: Number, default: null },
+    cost: { type: Number, default: null },           // total paid to vendor (product + delivery)
+    deliveryCost: { type: Number, default: null },    // delivery-only portion of cost, used for pin-code benchmarking
     assignedAt: { type: Date, default: null },
     deliveryNotes: { type: String, default: "" },
     internalRating: { type: Number, min: 1, max: 5, default: null },
     statCounted: { type: Boolean, default: false }, // guards against double-counting vendor stats
   },
+
+  // Per-product assignment — used instead of `vendor` when different items in
+  // the same order are fulfilled by different vendors. One entry per cartItem.
+  itemVendors: [{
+    cartItemId: { type: String, required: true },
+    vendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
+    name: { type: String, default: "" },
+    phone: { type: String, default: "" },
+    cost: { type: Number, default: null },
+    deliveryCost: { type: Number, default: null },
+    assignedAt: { type: Date, default: null },
+    deliveryNotes: { type: String, default: "" },
+    statCounted: { type: Boolean, default: false },
+  }],
 }, { timestamps: true });
 
 // Auto-generate orderId before save

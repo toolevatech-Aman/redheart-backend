@@ -1,7 +1,7 @@
 import express from "express";
 import {
   createVendor, updateVendor, deactivateVendor, listVendors,
-  getVendorProfile, recommendVendors, assignVendorToOrder, getPinCodeStat,
+  getVendorProfile, recommendVendors, assignVendorToOrder, assignVendorToOrderItem, getPinCodeStat,
 } from "../controllers/vendorController.js";
 
 const router = express.Router();
@@ -14,5 +14,6 @@ router.get("/:id", getVendorProfile);
 router.put("/:id", updateVendor);
 router.delete("/:id", deactivateVendor);
 router.post("/orders/:orderId/assign", assignVendorToOrder);
+router.post("/orders/:orderId/assign-item", assignVendorToOrderItem);
 
 export default router;
