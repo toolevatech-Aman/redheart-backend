@@ -28,6 +28,7 @@ import vendorRoutes from './routes/vendorRoutes.js';
 import { razorpayWebhook, runAbandonmentEmails } from './controllers/valentineController.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
 import { runDailyIndexNowSubmit } from './utils/dailyIndexNowSubmit.js';
+import { runVendorReconciliation } from './utils/reconcileVendorStats.js';
 const app = express();
 
 // Razorpay webhook — must receive raw body BEFORE express.json parses it
@@ -110,3 +111,14 @@ setTimeout(() => {
     runDailyIndexNowSubmit().then(r => console.log("[indexnow-daily]", r)).catch(err => console.error("[indexnow-daily]", err.message));
   }, 24 * 60 * 60 * 1000);
 }, 10 * 60 * 1000);
+
+// Daily vendor stats reconciliation — rebuilds Vendor.stats/PinCodeStat from
+// actual Order data so drift from reassigning vendors (the old vendor's
+// stats never auto-decrement) gets corrected automatically instead of
+// needing a manual script run.
+setTimeout(() => {
+  runVendorReconciliation().then(r => console.log("[vendor-reconcile]", r)).catch(err => console.error("[vendor-reconcile]", err.message));
+  setInterval(() => {
+    runVendorReconciliation().then(r => console.log("[vendor-reconcile]", r)).catch(err => console.error("[vendor-reconcile]", err.message));
+  }, 24 * 60 * 60 * 1000);
+}, 15 * 60 * 1000);
