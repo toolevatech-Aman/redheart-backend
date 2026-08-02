@@ -63,7 +63,19 @@ const orderSchema = new mongoose.Schema({
   totalProductPrice: Number,
   totalPrice: Number,
   orderNote: { type: String, default: "" },
-  orderStatus: { type: String, default: 'Pending' } // Pending, Processing, Shipped, Delivered, Cancelled
+  orderStatus: { type: String, default: 'Pending' }, // Pending, Processing, Shipped, Delivered, Cancelled
+
+  // ── Vendor assignment (manual, via ops) ──────────────────────────────────
+  vendor: {
+    vendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor", default: null },
+    name: { type: String, default: "" },
+    phone: { type: String, default: "" },
+    cost: { type: Number, default: null },
+    assignedAt: { type: Date, default: null },
+    deliveryNotes: { type: String, default: "" },
+    internalRating: { type: Number, min: 1, max: 5, default: null },
+    statCounted: { type: Boolean, default: false }, // guards against double-counting vendor stats
+  },
 }, { timestamps: true });
 
 // Auto-generate orderId before save
