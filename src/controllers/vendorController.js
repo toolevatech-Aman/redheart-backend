@@ -177,6 +177,14 @@ export const assignVendorToOrder = async (req, res) => {
     );
     if (!order) return res.status(404).json({ message: "Order not found" });
 
+    // Order was already Delivered/Cancelled before a vendor got attached (the
+    // common case when backfilling vendors onto historical orders) — the
+    // status-change hook that normally rolls up stats will never fire for it,
+    // so count it right here instead.
+    if (["Delivered", "Cancelled"].includes(order.orderStatus)) {
+      await recordVendorOutcome(order);
+    }
+
     res.json(order);
   } catch (err) {
     res.status(500).json({ message: err.message });
