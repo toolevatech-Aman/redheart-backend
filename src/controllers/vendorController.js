@@ -239,7 +239,7 @@ export const assignVendorToOrderItem = async (req, res) => {
 // charges above this, on average for a pin code, is flagged as an
 // under-recovered delivery cost so checkout can surcharge future orders there.
 const BASELINE_SHIPPING_FEE = 49;
-const MIN_SAMPLE_SIZE = 3; // minimum delivered orders from a pin code before its avg can surcharge checkout
+const MIN_SAMPLE_SIZE = 1; // minimum delivered orders from a pin code before its avg can surcharge checkout
 
 async function applyVendorStats(vendor, { isDelivered, isCancelled, cost, deliveryCost, revenue }) {
   vendor.stats.totalOrders += 1;
