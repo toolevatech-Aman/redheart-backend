@@ -21,14 +21,22 @@ const vendorSchema = new mongoose.Schema(
     status: { type: String, enum: ["active", "inactive"], default: "active" },
     notes: { type: String, default: "" },
 
+    // ── Vendor's own product price list — reference sheet, not tied to orders ──
+    pricingTable: [{
+      productName: { type: String, trim: true },
+      charge: { type: Number, default: 0 },
+    }],
+
     // ── Denormalized performance stats, updated on order completion ──────────
     stats: {
       totalOrders: { type: Number, default: 0 },
       deliveredOrders: { type: Number, default: 0 },
       cancelledOrders: { type: Number, default: 0 },
-      totalCost: { type: Number, default: 0 },
-      avgCost: { type: Number, default: 0 },
-      successRate: { type: Number, default: 0 }, // %
+      totalCost: { type: Number, default: 0 },     // total settlement paid to vendor (delivered orders)
+      avgCost: { type: Number, default: 0 },       // kept for backward compat; UI now shows totalCost as "Settlement"
+      totalRevenue: { type: Number, default: 0 },  // sum of order totalPrice for orders this vendor delivered
+      margin: { type: Number, default: 0 },        // totalRevenue - totalCost
+      successRate: { type: Number, default: 0 },   // %
       lastOrderAt: { type: Date, default: null },
     },
   },

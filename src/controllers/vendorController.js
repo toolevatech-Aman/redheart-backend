@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Vendor from "../models/Vendor.js";
 import Order from "../models/order.js";
+import PinCodeStat from "../models/PinCodeStat.js";
 
 const norm = (s) => (s || "").toString().trim().toLowerCase();
 
@@ -196,10 +197,14 @@ export async function recordVendorOutcome(order) {
   vendor.stats.totalOrders += 1;
   if (isDelivered) vendor.stats.deliveredOrders += 1;
   if (isCancelled) vendor.stats.cancelledOrders += 1;
-  if (order.vendor.cost) vendor.stats.totalCost += Number(order.vendor.cost);
+  if (isDelivered && order.vendor.cost) {
+    vendor.stats.totalCost += Number(order.vendor.cost); // total settlement paid to vendor
+    vendor.stats.totalRevenue += Number(order.totalPrice || 0); // what RedHeart earned on this order
+  }
   vendor.stats.avgCost = vendor.stats.deliveredOrders > 0
     ? Math.round(vendor.stats.totalCost / vendor.stats.deliveredOrders)
     : vendor.stats.avgCost;
+  vendor.stats.margin = vendor.stats.totalRevenue - vendor.stats.totalCost;
   vendor.stats.successRate = vendor.stats.totalOrders > 0
     ? Math.round((vendor.stats.deliveredOrders / vendor.stats.totalOrders) * 100)
     : 0;
@@ -207,4 +212,27 @@ export async function recordVendorOutcome(order) {
   await vendor.save();
 
   await Order.updateOne({ _id: order._id }, { "vendor.statCounted": true });
+
+  // Cross-vendor delivery-cost benchmark for this pin code
+  const pinCode = order.shippingAddress?.postalCode;
+  if (isDelivered && pinCode && order.vendor.cost) {
+    const stat = await PinCodeStat.findOneAndUpdate(
+      { pinCode: String(pinCode).trim() },
+      { $inc: { totalCost: Number(order.vendor.cost), orderCount: 1 } },
+      { upsert: true, new: true }
+    );
+    stat.avgCost = Math.round(stat.totalCost / stat.orderCount);
+    await stat.save();
+  }
 }
+
+export const getPinCodeStat = async (req, res) => {
+  try {
+    const { pinCode } = req.query;
+    if (!pinCode) return res.status(400).json({ message: "pinCode is required" });
+    const stat = await PinCodeStat.findOne({ pinCode: String(pinCode).trim() });
+    res.json(stat || { pinCode, totalCost: 0, orderCount: 0, avgCost: 0 });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

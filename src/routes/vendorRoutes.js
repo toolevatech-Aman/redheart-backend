@@ -1,12 +1,13 @@
 import express from "express";
 import {
   createVendor, updateVendor, deactivateVendor, listVendors,
-  getVendorProfile, recommendVendors, assignVendorToOrder,
+  getVendorProfile, recommendVendors, assignVendorToOrder, getPinCodeStat,
 } from "../controllers/vendorController.js";
 
 const router = express.Router();
 
 router.get("/recommend", recommendVendors); // before /:id so "recommend" isn't parsed as an id
+router.get("/pincode-stats", getPinCodeStat); // before /:id, same reason
 router.get("/", listVendors);
 router.post("/", createVendor);
 router.get("/:id", getVendorProfile);
