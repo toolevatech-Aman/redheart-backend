@@ -239,6 +239,7 @@ export const assignVendorToOrderItem = async (req, res) => {
 // charges above this, on average for a pin code, is flagged as an
 // under-recovered delivery cost so checkout can surcharge future orders there.
 const BASELINE_SHIPPING_FEE = 49;
+const MIN_SAMPLE_SIZE = 3; // minimum delivered orders from a pin code before its avg can surcharge checkout
 
 async function applyVendorStats(vendor, { isDelivered, isCancelled, cost, deliveryCost, revenue }) {
   vendor.stats.totalOrders += 1;
@@ -274,7 +275,11 @@ async function applyPinCodeStat(pinCode, { cost, deliveryCost }) {
   if (stat.orderCount > 0) stat.avgCost = Math.round(stat.totalCost / stat.orderCount);
   if (stat.deliveryOrderCount > 0) {
     stat.avgDeliveryCost = Math.round(stat.totalDeliveryCost / stat.deliveryOrderCount);
-    stat.extraDeliveryFee = Math.max(0, stat.avgDeliveryCost - BASELINE_SHIPPING_FEE);
+    // Require a few data points before trusting the average enough to surcharge
+    // real customers — one unusually expensive delivery shouldn't set the price.
+    stat.extraDeliveryFee = stat.deliveryOrderCount >= MIN_SAMPLE_SIZE
+      ? Math.max(0, stat.avgDeliveryCost - BASELINE_SHIPPING_FEE)
+      : 0;
   }
   await stat.save();
 }
