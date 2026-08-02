@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Vendor from "../models/Vendor.js";
 import Order from "../models/order.js";
 import PinCodeStat from "../models/PinCodeStat.js";
+import { itemRevenue } from "../utils/itemRevenue.js";
 
 const norm = (s) => (s || "").toString().trim().toLowerCase();
 
@@ -332,7 +333,7 @@ export const updateOrderItemVendorCost = async (req, res) => {
 
     if (order.orderStatus === "Delivered") {
       const item = (order.cartItems || []).find((ci) => String(ci._id) === cartItemId);
-      const revenue = item ? Number(item.selling_price || 0) * Number(item.quantity || 1) : 0;
+      const revenue = itemRevenue(item);
 
       vendor.stats.totalCost += newCost - oldCost;
       if (!wasRevenueCounted) {
@@ -455,7 +456,7 @@ export async function recordItemVendorOutcomes(order) {
     if (!vendor) continue;
 
     const item = (order.cartItems || []).find((ci) => String(ci._id) === iv.cartItemId);
-    const revenue = item ? Number(item.selling_price || 0) * Number(item.quantity || 1) : 0;
+    const revenue = itemRevenue(item);
 
     await applyVendorStats(vendor, {
       isDelivered, isCancelled,

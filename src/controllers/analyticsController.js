@@ -2,6 +2,7 @@ import Order from "../models/order.js";
 import Product from "../models/Product.js";
 import User from "../models/User.js";
 import Vendor from "../models/Vendor.js";
+import { itemRevenue } from "../utils/itemRevenue.js";
 import { isTestAccount } from "./userController.js";
 
 const PAID_STATUSES = ["COD", "PAID"];
@@ -143,7 +144,7 @@ export const getMarginAnalytics = async (req, res) => {
         const catRevenue = new Map();
         for (const ci of o.cartItems || []) {
           const cat = categoryByPid[String(ci.productId)] || "Uncategorized";
-          catRevenue.set(cat, (catRevenue.get(cat) || 0) + (ci.selling_price || 0) * (ci.quantity || 1));
+          catRevenue.set(cat, (catRevenue.get(cat) || 0) + itemRevenue(ci));
         }
         const lineTotal = [...catRevenue.values()].reduce((s, v) => s + v, 0) || orderRevenue;
         for (const [cat, rev] of catRevenue.entries()) {
@@ -155,7 +156,7 @@ export const getMarginAnalytics = async (req, res) => {
       for (const iv of itemsWithCost) {
         const item = (o.cartItems || []).find((ci) => String(ci._id) === iv.cartItemId);
         if (!item) continue;
-        const revenue = (item.selling_price || 0) * (item.quantity || 1);
+        const revenue = itemRevenue(item);
         const cost = Number(iv.cost);
         const cat = categoryByPid[String(item.productId)] || "Uncategorized";
         totalRevenue += revenue;

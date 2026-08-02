@@ -12,6 +12,7 @@ import mongoose from "mongoose";
 import Order from "../src/models/order.js";
 import Vendor from "../src/models/Vendor.js";
 import PinCodeStat from "../src/models/PinCodeStat.js";
+import { itemRevenue } from "../src/utils/itemRevenue.js";
 
 const BASELINE_SHIPPING_FEE = 49;
 const MIN_SAMPLE_SIZE = 1;
@@ -83,7 +84,7 @@ for (const o of orders) {
         const hasCost = isDelivered && !!iv.cost;
         if (hasCost) {
           const item = (o.cartItems || []).find((ci) => String(ci._id) === iv.cartItemId);
-          const revenue = item ? Number(item.selling_price || 0) * Number(item.quantity || 1) : 0;
+          const revenue = itemRevenue(item);
           v.totalCost += Number(iv.cost);
           v.totalRevenue += revenue;
           if (o.shippingAddress?.postalCode) {
