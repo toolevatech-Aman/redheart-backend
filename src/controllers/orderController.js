@@ -20,23 +20,32 @@ export const createOrder = async (req, res) => {
       orderData.deliveryDate = new Date(`${year}-${month}-${day}`);
     }
 
-    // Never trust the discount amount the client computed — recompute it
-    // server-side (global Coupon collection first, legacy user.coupons as
-    // fallback), or a tampered request could apply any discount it wants.
+    // Never trust totalPrice from the client — always recompute it
+    // server-side from its parts (subtotal, shipping, coupon discount,
+    // tip), or a tampered request could set any final price it wants.
+    const subtotal = Number(orderData.totalProductPrice) || 0;
+    const shippingTotal = Number(orderData.totalShipmentPrice) || 0;
+
+    // Tip is discretionary money the customer is choosing to add — not an
+    // exploit vector the way a discount is — but still sanity-capped
+    // against a UI glitch producing an absurd charge.
+    const rawTip = Number(orderData.tipAmount) || 0;
+    const tipAmount = Math.max(0, Math.min(rawTip, Math.round(subtotal * 0.5), 2000));
+    orderData.tipAmount = tipAmount;
+
+    let discount = 0;
     if (orderData.coupanApplied) {
-      const subtotal = Number(orderData.totalProductPrice) || 0;
       const result = await validateAndComputeCoupon({
         code: orderData.coupanApplied, userId, subtotal,
-        shippingCharges: orderData.totalShipmentPrice,
+        shippingCharges: shippingTotal,
       });
-
-      orderData.coupanDiscount = result.discount;
+      discount = result.discount;
+      orderData.coupanDiscount = discount;
       orderData.coupanSource = result.source;
       if (!result.source) orderData.coupanApplied = null; // invalid/expired — don't record a code that didn't actually apply
-      orderData.totalPrice = (Number(orderData.totalProductPrice) || 0)
-        + (Number(orderData.totalShipmentPrice) || 0)
-        - result.discount;
     }
+
+    orderData.totalPrice = subtotal + shippingTotal - discount + tipAmount;
 
     let razorpayOrder = null; // declare variable for response
 

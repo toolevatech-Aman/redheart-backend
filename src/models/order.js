@@ -63,6 +63,7 @@ const orderSchema = new mongoose.Schema({
   totalShipmentPrice: Number,
   totalProductPrice: Number,
   totalPrice: Number,
+  tipAmount: { type: Number, default: 0 }, // voluntary tip for the delivery partner
   orderNote: { type: String, default: "" },
   orderStatus: { type: String, default: 'Pending' }, // Pending, Processing, Shipped, Delivered, Cancelled
 
