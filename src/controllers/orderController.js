@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import { getRazorpayInstance } from '../services/razorpay.js';
 import { sendOrderAlertEmail } from '../utils/orderAlertMail.js';
 import { recordVendorOutcome, recordItemVendorOutcomes } from './vendorController.js';
+import { validateAndComputeCoupon, markCouponUsed } from '../utils/couponEngine.js';
 
 import { createHmac } from "crypto";
 
@@ -20,27 +21,21 @@ export const createOrder = async (req, res) => {
     }
 
     // Never trust the discount amount the client computed — recompute it
-    // server-side from the user's actual coupon record (incl. maxDiscount
-    // cap), or a tampered request could apply any discount it wants.
+    // server-side (global Coupon collection first, legacy user.coupons as
+    // fallback), or a tampered request could apply any discount it wants.
     if (orderData.coupanApplied) {
-      const user = await User.findOne({ userId }).select("coupons").lean();
-      const coupon = user?.coupons?.find(
-        (c) => c.code?.toUpperCase() === orderData.coupanApplied.toUpperCase() && !c.isUsed
-      );
       const subtotal = Number(orderData.totalProductPrice) || 0;
+      const result = await validateAndComputeCoupon({
+        code: orderData.coupanApplied, userId, subtotal,
+        shippingCharges: orderData.totalShipmentPrice,
+      });
 
-      let discount = 0;
-      if (coupon && subtotal >= Number(coupon.minOrderValue || 0)) {
-        discount = coupon.discountType === "percentage"
-          ? (subtotal * Number(coupon.discountValue)) / 100
-          : Number(coupon.discountValue);
-        if (coupon.maxDiscount) discount = Math.min(discount, Number(coupon.maxDiscount));
-      }
-
-      orderData.coupanDiscount = discount;
+      orderData.coupanDiscount = result.discount;
+      orderData.coupanSource = result.source;
+      if (!result.source) orderData.coupanApplied = null; // invalid/expired — don't record a code that didn't actually apply
       orderData.totalPrice = (Number(orderData.totalProductPrice) || 0)
         + (Number(orderData.totalShipmentPrice) || 0)
-        - discount;
+        - result.discount;
     }
 
     let razorpayOrder = null; // declare variable for response
@@ -65,12 +60,9 @@ export const createOrder = async (req, res) => {
     const order = new Order({ ...orderData, userId });
     await order.save();
     sendOrderAlertEmail(order); // fire-and-forget, never blocks the response
-   if (orderData.paymentMode === 'COD' && orderData.coupanApplied) {
-  await User.updateOne(
-    { userId, 'coupons.code': orderData.coupanApplied.toUpperCase() },
-    { $set: { 'coupons.$.isUsed': true } }
-  );
-}
+    if (orderData.paymentMode === 'COD' && orderData.coupanApplied) {
+      await markCouponUsed({ code: orderData.coupanApplied, source: orderData.coupanSource, userId });
+    }
 
     res.status(201).json({
       success: true,
@@ -141,15 +133,7 @@ export const verifyPayment = async (req, res) => {
 
     // 7️⃣ Mark coupon as used (AFTER payment success)
     if (order.coupanApplied) {
-      await User.updateOne(
-        {
-          userId: order.userId,
-          'coupons.code': order.coupanApplied.toUpperCase()
-        },
-        {
-          $set: { 'coupons.$.isUsed': true }
-        }
-      );
+      await markCouponUsed({ code: order.coupanApplied, source: order.coupanSource, userId: order.userId });
     }
 
     // 8️⃣ Respond success

@@ -59,6 +59,7 @@ const orderSchema = new mongoose.Schema({
   shippingCharges: Number,
   coupanApplied: String,
   coupanDiscount: Number,
+  coupanSource: { type: String, enum: ["global", "legacy", null], default: null }, // which coupon system validated this — needed to mark it used correctly after payment
   totalShipmentPrice: Number,
   totalProductPrice: Number,
   totalPrice: Number,

@@ -25,6 +25,7 @@ import shayariSubmissionRoutes from './routes/shayariSubmissionRoutes.js';
 import subscriberRoutes from './routes/subscriberRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import vendorRoutes from './routes/vendorRoutes.js';
+import couponRoutes from './routes/couponRoutes.js';
 import { razorpayWebhook, runAbandonmentEmails } from './controllers/valentineController.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
 import { runDailyIndexNowSubmit } from './utils/dailyIndexNowSubmit.js';
@@ -79,6 +80,7 @@ app.use("/api/shayari-submissions", shayariSubmissionRoutes);
 app.use("/api/subscribers",     subscriberRoutes);
 app.use("/api/analytics",       analyticsRoutes);
 app.use("/api/vendors",         vendorRoutes);
+app.use("/api/coupons",         couponRoutes);
 
 // ── Sitemaps (public, no /api prefix) ────────────────────────────────────────
 app.get("/sitemap_cities.xml", citiesSitemap);
