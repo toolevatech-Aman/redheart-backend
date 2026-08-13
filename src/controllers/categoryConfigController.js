@@ -2,6 +2,7 @@
 import XLSX from "xlsx";
 import CategoryConfig from "../models/CategoryConfig.js";
 import CityPage from "../models/CityPage.js";
+import { invalidateCache } from "../middlewares/cacheMiddleware.js";
 import ALL_INDIAN_CITIES from "../data/indianCities.js";
 
 const DEFAULT_CITIES = ALL_INDIAN_CITIES;
@@ -72,6 +73,7 @@ export async function getConfig(req, res) {
 export async function createConfig(req, res) {
   try {
     const config = await CategoryConfig.create(req.body);
+    invalidateCache("/api/category-config");
     return res.status(201).json(config);
   } catch (err) {
     if (err.code === 11000) {
@@ -94,6 +96,7 @@ export async function updateConfig(req, res) {
       { new: true, runValidators: true }
     );
     if (!config) return res.status(404).json({ message: "Config not found" });
+    invalidateCache("/api/category-config");
     return res.json(config);
   } catch (err) {
     if (err.code === 11000) {
@@ -112,6 +115,7 @@ export async function deleteConfig(req, res) {
   try {
     const config = await CategoryConfig.findOneAndDelete({ name: req.params.name });
     if (!config) return res.status(404).json({ message: "Config not found" });
+    invalidateCache("/api/category-config");
     return res.json({ message: "Deleted successfully" });
   } catch (err) {
     console.error("deleteConfig error:", err);

@@ -1,6 +1,7 @@
 import CityPage from "../models/CityPage.js";
 import { revalidateTags } from "../utils/revalidate.js";
 import { submitToIndexNow } from "../utils/indexNow.js";
+import { invalidateCache } from "../middlewares/cacheMiddleware.js";
 
 // ── Utility helpers ───────────────────────────────────────────────────────────
 
@@ -350,6 +351,7 @@ export async function addCity(req, res) {
 
     const data = generateCityData(category, cityName);
     const city = await CityPage.create(data);
+    invalidateCache("/api/city/all-slugs", `/api/city/public/${category}`);
     return res.status(201).json(city);
   } catch (err) {
     if (err.code === 11000) {
@@ -399,6 +401,7 @@ export async function addCitiesBulk(req, res) {
     }
 
     submitToIndexNow(addedUrls);
+    if (added.length > 0) invalidateCache("/api/city/all-slugs", `/api/city/public/${category}`);
     return res.json({ added, skipped, errors });
   } catch (err) {
     console.error("addCitiesBulk error:", err);
@@ -423,6 +426,7 @@ export async function updateCity(req, res) {
     const city = await CityPage.findByIdAndUpdate(id, { $set: update }, { new: true, runValidators: true });
     if (!city) return res.status(404).json({ message: "City not found" });
     revalidateTags([`city-${city.category}-${city.slug}`]);
+    invalidateCache(`/api/city/page/${city.category}/${city.slug}`, "/api/city/all-slugs", `/api/city/public/${city.category}`);
     return res.json(city);
   } catch (err) {
     console.error("updateCity error:", err);
@@ -439,6 +443,7 @@ export async function deleteCity(req, res) {
     const { id } = req.params;
     const city = await CityPage.findByIdAndDelete(id);
     if (!city) return res.status(404).json({ message: "City not found" });
+    invalidateCache(`/api/city/page/${city.category}/${city.slug}`, "/api/city/all-slugs", `/api/city/public/${city.category}`);
     return res.json({ message: "Deleted successfully" });
   } catch (err) {
     console.error("deleteCity error:", err);
@@ -482,6 +487,7 @@ export async function regenerateCities(req, res) {
       updated++;
     }
 
+    if (updated > 0) invalidateCache(`/api/city/page/${category}/`, "/api/city/all-slugs", `/api/city/public/${category}`);
     return res.json({ message: `Regenerated ${updated} cities for ${category}.`, updated });
   } catch (err) {
     console.error("regenerateCities error:", err);
@@ -553,6 +559,7 @@ export async function upsertCityContent(req, res) {
       { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
     );
     if (doc?.url) submitToIndexNow(`https://www.redheart.in${doc.url}`);
+    invalidateCache(`/api/city/page/${category}/${slug}`, "/api/city/all-slugs", `/api/city/public/${category}`);
     return res.json(doc);
   } catch (err) {
     console.error("upsertCityContent error:", err);

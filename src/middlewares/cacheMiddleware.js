@@ -28,3 +28,24 @@ export const cacheResponse = (ttlSeconds = 300) => (req, res, next) => {
   };
   next();
 };
+
+/**
+ * Evicts cached GET responses so a write is reflected immediately instead
+ * of waiting out the TTL. Pass an exact `req.originalUrl` (e.g.
+ * "/api/city/page/Cakes/mumbai") to remove one entry, or a prefix (e.g.
+ * "/api/city/") to sweep every cached URL under it — useful for listing
+ * endpoints (all-slugs, public/:category) whose key includes params we
+ * don't always know at the call site.
+ */
+export const invalidateCache = (...keysOrPrefixes) => {
+  for (const target of keysOrPrefixes) {
+    if (!target) continue;
+    if (store.has(target)) {
+      store.delete(target);
+      continue;
+    }
+    for (const key of store.keys()) {
+      if (key.startsWith(target)) store.delete(key);
+    }
+  }
+};

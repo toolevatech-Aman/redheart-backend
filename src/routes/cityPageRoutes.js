@@ -27,9 +27,9 @@ router.put("/cities/:id",                    ...auth, updateCity);
 router.delete("/cities/:id",                 ...auth, deleteCity);
 
 // ── Public routes ─────────────────────────────────────────────────────────────
-router.get("/all-slugs",              cacheResponse(300), getAllCitySlugs);
-router.get("/page/:category/:slug",   cacheResponse(300), getCityPage);
-router.get("/public/:category",       cacheResponse(300), getCitiesPublic);
+router.get("/all-slugs",              cacheResponse(3600), getAllCitySlugs);
+router.get("/page/:category/:slug",   cacheResponse(3600), getCityPage);
+router.get("/public/:category",       cacheResponse(3600), getCitiesPublic);
 router.post("/upsert",                upsertCityContent); // open — content seeding scripts
 
 export default router;

@@ -5,6 +5,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import morgan from "morgan";
+import compression from "compression";
 
 import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -26,6 +27,7 @@ import subscriberRoutes from './routes/subscriberRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import vendorRoutes from './routes/vendorRoutes.js';
 import couponRoutes from './routes/couponRoutes.js';
+import blogRoutes from './routes/blogRoutes.js';
 import { razorpayWebhook, runAbandonmentEmails } from './controllers/valentineController.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
 import { runDailyIndexNowSubmit } from './utils/dailyIndexNowSubmit.js';
@@ -42,6 +44,7 @@ app.post(
 
 // Middlewares
 app.use(cors());
+app.use(compression());
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(morgan("dev"));
@@ -64,6 +67,7 @@ app.use((req, res, next) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
+app.use("/api/blogs", blogRoutes);
 app.use("/api/addOn", addOnRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/page-content", pageContentRoutes);

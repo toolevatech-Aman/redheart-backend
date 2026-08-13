@@ -24,11 +24,11 @@ const router = express.Router();
 
 // Public APIs
 router.get("/", getProducts);                        // Search/filter products
-router.get("/all-slugs", cacheResponse(300), getAllProductSlugs);        // Lightweight list for sitemap
+router.get("/all-slugs", cacheResponse(3600), getAllProductSlugs);        // Lightweight list for sitemap
 router.post("/by-ids", getProductsByIds);            // Fetch multiple products by _id array
 router.get("/for-page", getProductsForPage);        // Fetch all products for a page (admin sequencer)
-router.get("/slug/:slug", cacheResponse(300), getProductBySlug);         // Full product details by slug (SEO)
-router.get("/:product_id", cacheResponse(300), getProductById);          // Full product details by product_id
+router.get("/slug/:slug", cacheResponse(3600), getProductBySlug);         // Full product details by slug (SEO)
+router.get("/:product_id", cacheResponse(3600), getProductById);          // Full product details by product_id
 router.post("/:product_id/review", auth, updateReview); // Add/edit review — must be logged in
 
 // Admin APIs

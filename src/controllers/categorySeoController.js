@@ -1,6 +1,7 @@
 import CategorySeoPage from "../models/CategorySeoPage.js";
 import { revalidateTags } from "../utils/revalidate.js";
 import { submitToIndexNow } from "../utils/indexNow.js";
+import { invalidateCache } from "../middlewares/cacheMiddleware.js";
 
 // GET /category-seo/all-slugs — lightweight list for sitemap generation
 export const getAllCategorySeoPaths = async (req, res) => {
@@ -47,6 +48,7 @@ export const updatePage = async (req, res) => {
     if (!updated) return res.status(404).json({ success: false, message: "Page not found" });
     revalidateTags([`cat-seo-${updated.pageKey}`, `cat-seo-${updated.categorySlug}`]);
     if (updated?.url) submitToIndexNow(`https://www.redheart.in${updated.url}`);
+    invalidateCache(`/api/category-seo/page/${updated.pageKey}`, "/api/category-seo/all-slugs");
     res.json({ success: true, data: updated });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -65,6 +67,7 @@ export const upsertPage = async (req, res) => {
     );
     revalidateTags([`cat-seo-${updated.pageKey}`, `cat-seo-${updated.categorySlug}`]);
     if (updated?.url) submitToIndexNow(`https://www.redheart.in${updated.url}`);
+    invalidateCache(`/api/category-seo/page/${updated.pageKey}`, "/api/category-seo/all-slugs");
     res.json({ success: true, data: updated });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -108,6 +111,7 @@ export const seedPages = async (req, res) => {
     const result = await CategorySeoPage.bulkWrite(ops);
     const total = await CategorySeoPage.countDocuments();
     submitToIndexNow(pages.map((p) => `https://www.redheart.in${p.url}`));
+    invalidateCache("/api/category-seo/page/", "/api/category-seo/all-slugs");
     res.json({
       success: true,
       message: `Seeded ${result.upsertedCount} new pages. Total: ${total}.`,

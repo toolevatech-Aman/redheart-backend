@@ -1,6 +1,7 @@
 // controllers/productController.js
 import Product from "../models/Product.js";
 import { resolveFiltersFromPageKey } from "../utils/urlFilters.js";
+import { invalidateCache } from "../middlewares/cacheMiddleware.js";
 import fs from "fs";
 import csv from "csv-parser";
 // ---------------- PUBLIC ----------------
@@ -296,6 +297,7 @@ export const updateReview = async (req, res) => {
 
     await product.save();
 
+    invalidateCache(`/api/products/${product_id}`, product.slug && `/api/products/slug/${product.slug}`);
     res.json({ message: "Review saved", product });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -314,6 +316,7 @@ export const addProduct = async (req, res) => {
     if (existing) return res.status(400).json({ message: "Product ID already exists" });
 
     const product = await Product.create(req.body);
+    invalidateCache("/api/products/all-slugs");
     res.json({ message: "Product added", product });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -331,6 +334,7 @@ export const editProduct = async (req, res) => {
     Object.assign(product, req.body); // simple update
     await product.save();
 
+    invalidateCache(`/api/products/${product_id}`, product.slug && `/api/products/slug/${product.slug}`, "/api/products/all-slugs");
     res.json({ message: "Product updated", product });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -351,6 +355,7 @@ export const updateDeliveryType = async (req, res) => {
       { new: true }
     );
     if (!product) return res.status(404).json({ message: "Product not found" });
+    invalidateCache(`/api/products/${product_id}`, product.slug && `/api/products/slug/${product.slug}`);
     res.json({ message: "Delivery type updated", product });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -365,6 +370,7 @@ export const deleteProduct = async (req, res) => {
     const product = await Product.findOneAndDelete({ product_id });
     if (!product) return res.status(404).json({ message: "Product not found" });
 
+    invalidateCache(`/api/products/${product_id}`, product.slug && `/api/products/slug/${product.slug}`, "/api/products/all-slugs");
     res.json({ message: "Product deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });

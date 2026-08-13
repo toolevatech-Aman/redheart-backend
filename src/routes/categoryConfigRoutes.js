@@ -17,8 +17,8 @@ const router = express.Router();
 const auth   = [authMiddleware, isAdmin];
 
 // Public
-router.get("/",     cacheResponse(300), listConfigs);
-router.get("/:name", cacheResponse(300), getConfig);
+router.get("/",     cacheResponse(3600), listConfigs);
+router.get("/:name", cacheResponse(3600), getConfig);
 
 // Admin-protected
 router.post("/",                      ...auth, createConfig);
