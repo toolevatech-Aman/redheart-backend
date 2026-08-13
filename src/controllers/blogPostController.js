@@ -9,6 +9,7 @@ export async function listBlogPosts(req, res) {
     if (req.query.category) filter.category = req.query.category;
     const posts = await BlogPost.find(filter)
       .populate("category", "name slug")
+      .populate("additionalCategories", "name slug")
       .populate("subcategory", "name slug")
       .sort({ createdAt: -1 })
       .lean();
@@ -19,12 +20,28 @@ export async function listBlogPosts(req, res) {
   }
 }
 
+// ── Admin: single post by ID (for the edit form) ────────────────────────────
+export async function getBlogPostById(req, res) {
+  try {
+    const post = await BlogPost.findById(req.params.id)
+      .populate("category", "name slug")
+      .populate("additionalCategories", "name slug")
+      .populate("subcategory", "name slug");
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    return res.json(post);
+  } catch (err) {
+    console.error("getBlogPostById error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
+
 // ── Public: single post by category slug + post slug ───────────────────────
 export async function getBlogPostBySlug(req, res) {
   try {
     const { categorySlug, slug } = req.params;
     const post = await BlogPost.findOne({ slug, status: "published" })
       .populate("category", "name slug")
+      .populate("additionalCategories", "name slug")
       .populate("subcategory", "name slug");
     if (!post || post.category?.slug !== categorySlug) {
       return res.status(404).json({ message: "Post not found" });
@@ -44,7 +61,8 @@ export async function listPublishedPosts(req, res) {
       const { BlogCategory } = await import("../models/BlogCategory.js");
       const cat = await BlogCategory.findOne({ slug: req.query.categorySlug }).lean();
       if (!cat) return res.json({ posts: [], total: 0 });
-      filter.category = cat._id;
+      // Match either the post's primary category or one of its additional ones.
+      filter.$or = [{ category: cat._id }, { additionalCategories: cat._id }];
     }
     const page  = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(50, parseInt(req.query.limit) || 12);
@@ -117,15 +135,23 @@ export async function deleteBlogPost(req, res) {
 
 // ── Public: ranked "Related Blog" cards for a given page context ──────────
 // Body/query: { page, category, subcategory, occasion, relationship, citySlug, limit }
-// Scoring (higher wins): exact city+category match (100) > explicit page
-// match (80) > subcategory/occasion/relationship match (60) > category-only
-// match (20). A post's best-matching tag decides its score; ties broken by
-// most recently published.
+// Scoring (higher wins): exact city+category match (100) > "India" wildcard
+// city+category match — every city page under that category (90) > explicit
+// page match (80) > subcategory/occasion/relationship match (60) >
+// category-only match (20). A post's best-matching tag decides its score;
+// ties broken by most recently published.
+const isIndiaWildcard = (citySlug) => (citySlug || "").trim().toLowerCase() === "india";
+
 function scorePost(post, ctx) {
   let score = 0;
   const t = post.tags || {};
-  if (ctx.citySlug && ctx.category && (t.cities || []).some((c) => c.category === ctx.category && c.citySlug === ctx.citySlug)) {
-    score = Math.max(score, 100);
+  if (ctx.citySlug && ctx.category) {
+    const cityTags = t.cities || [];
+    if (cityTags.some((c) => c.category === ctx.category && c.citySlug === ctx.citySlug)) {
+      score = Math.max(score, 100);
+    } else if (cityTags.some((c) => c.category === ctx.category && isIndiaWildcard(c.citySlug))) {
+      score = Math.max(score, 90); // tagged "India" under this category — matches every city page in it
+    }
   }
   if (ctx.page && (t.pages || []).includes(ctx.page)) {
     score = Math.max(score, 80);
@@ -169,6 +195,9 @@ export async function getBlogsForPage(req, res) {
     if (ctx.relationship) or.push({ "tags.relationships": ctx.relationship });
     if (ctx.citySlug && ctx.category) {
       or.push({ "tags.cities": { $elemMatch: { category: ctx.category, citySlug: ctx.citySlug } } });
+      // Also catch "India" wildcard tags for this category, which won't
+      // match the exact citySlug above but should still be candidates.
+      or.push({ "tags.cities": { $elemMatch: { category: ctx.category, citySlug: { $regex: /^india$/i } } } });
     }
     if (or.length === 0) return res.json([]);
 

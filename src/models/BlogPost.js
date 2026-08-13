@@ -12,7 +12,14 @@ const blogPostSchema = new mongoose.Schema(
     title: { type: String, required: true },
     slug:  { type: String, required: true, unique: true }, // URL: /blog/:categorySlug/:slug
 
+    // Primary category — drives this post's one canonical URL:
+    // /blog/:category.slug/:slug. Required, singular by design (a post has
+    // exactly one address for SEO), even though it can also be listed under
+    // additionalCategories below.
     category:    { type: mongoose.Schema.Types.ObjectId, ref: "BlogCategory", required: true },
+    // Extra categories this post should ALSO appear under on the /blog hub —
+    // does not change the URL, which always uses the primary category above.
+    additionalCategories: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: "BlogCategory" }], default: [] },
     subcategory: { type: mongoose.Schema.Types.ObjectId, ref: "BlogSubcategory", default: null }, // hub/filtering only
 
     coverImage: { type: String, default: "" },
@@ -46,6 +53,7 @@ const blogPostSchema = new mongoose.Schema(
 blogPostSchema.index({ slug: 1 }, { unique: true });
 blogPostSchema.index({ status: 1, publishedAt: -1 });
 blogPostSchema.index({ "tags.categories": 1 });
+blogPostSchema.index({ additionalCategories: 1 });
 blogPostSchema.index({ "tags.pages": 1 });
 blogPostSchema.index({ "tags.cities.category": 1, "tags.cities.citySlug": 1 });
 
