@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import Order from "../models/order.js";
 import Cart from "../models/Cart.js";
+import { v4 as uuidv4 } from "uuid";
 
 const PRODUCT_CATEGORY_SLUG = { Flowers: "flowers", Cakes: "cakes", Plants: "plants" };
 
@@ -195,6 +196,48 @@ export const searchUsersForAccess = async (req, res) => {
       .lean();
 
     res.json({ success: true, data: users });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ================= ADMIN: INVITE AN EMAIL THAT HAS NEVER LOGGED IN ============
+// Pre-creates a User record with role "admin" + the chosen accessLevel, keyed
+// by email only (no googleId yet). When that Gmail account signs into the
+// panel for the first time, googleAuth's existing "no googleId match → fall
+// back to email match" lookup finds this exact record and just attaches the
+// googleId/name/avatar to it — role and accessLevel are left untouched, so
+// the access assigned here takes effect on their very first login.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const inviteAdminByEmail = async (req, res) => {
+  try {
+    const { email, accessLevel } = req.body;
+    const normalizedEmail = (email || "").trim().toLowerCase();
+
+    if (!normalizedEmail || !EMAIL_RE.test(normalizedEmail)) {
+      return res.status(400).json({ message: "A valid email is required." });
+    }
+    const level = accessLevel || "overall";
+    if (!VALID_ACCESS_LEVELS.includes(level)) {
+      return res.status(400).json({ message: `accessLevel must be one of: ${VALID_ACCESS_LEVELS.join(", ")}` });
+    }
+
+    let user = await User.findOne({ email: normalizedEmail });
+    if (user) {
+      user.role = "admin";
+      user.accessLevel = level;
+      await user.save();
+      return res.json({ success: true, created: false, user });
+    }
+
+    user = await User.create({
+      userId: uuidv4(),
+      email: normalizedEmail,
+      role: "admin",
+      accessLevel: level,
+    });
+    res.json({ success: true, created: true, user });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

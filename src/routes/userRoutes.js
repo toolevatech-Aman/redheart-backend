@@ -3,7 +3,7 @@ import auth from "../middlewares/authMiddleware.js";
 import { checkAccess } from "../middlewares/checkAccess.js";
 import {
   updateProfile, me, updateAddress, deleteAddress, getAllUsersAdmin, updateUserAccess,
-  listAdmins, searchUsersForAccess,
+  listAdmins, searchUsersForAccess, inviteAdminByEmail,
 } from "../controllers/userController.js";
 
 const router = express.Router();
@@ -14,6 +14,7 @@ router.get("/admin/all", auth, isOverallAdmin, getAllUsersAdmin);
 // Access Control page — overall admins only.
 router.get("/admin/admins", auth, isOverallAdmin, listAdmins);
 router.get("/admin/search", auth, isOverallAdmin, searchUsersForAccess);
+router.post("/admin/invite", auth, isOverallAdmin, inviteAdminByEmail);
 router.patch("/admin/:id/access", auth, isOverallAdmin, updateUserAccess);
 
 // Protected
