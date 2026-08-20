@@ -162,6 +162,44 @@ export const updateUserAccess = async (req, res) => {
   }
 };
 
+// ================= ADMIN: LIST CURRENT ADMINS (for the Access Control page) =====
+export const listAdmins = async (req, res) => {
+  try {
+    const admins = await User.find({ role: "admin" })
+      .select("userId name email avatar accessLevel createdAt")
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json({ success: true, data: admins });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ================= ADMIN: SEARCH USERS BY EMAIL/NAME (to grant access) =========
+// Someone must have logged into the panel at least once (creating their User
+// doc as a plain "user") before they can be found here and promoted — there's
+// no way to pre-invite an email that has never signed in.
+export const searchUsersForAccess = async (req, res) => {
+  try {
+    const q = (req.query.q || "").trim();
+    if (!q) return res.json({ success: true, data: [] });
+
+    const users = await User.find({
+      $or: [
+        { email: { $regex: q, $options: "i" } },
+        { name: { $regex: q, $options: "i" } },
+      ],
+    })
+      .select("userId name email avatar role accessLevel createdAt")
+      .limit(10)
+      .lean();
+
+    res.json({ success: true, data: users });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // ================= UPDATE PROFILE =================
 
 export const updateProfile = async (req, res) => {
