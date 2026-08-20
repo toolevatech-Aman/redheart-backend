@@ -1,6 +1,6 @@
 import express from "express";
 import auth from "../middlewares/authMiddleware.js";
-import { isAdmin } from "../middlewares/isAdmin.js";
+import { checkAccess } from "../middlewares/checkAccess.js";
 import {
   createValentinePage,
   getValentinePage,
@@ -25,7 +25,7 @@ router.post("/magic-link",         sendMagicLink);
 router.post("/verify-magic-link",  verifyMagicLink);
 router.get("/my-pages",            getMyPages);
 router.post("/send-abandonment",   sendAbandonmentEmails);
-router.get("/admin/orders",        auth, isAdmin, getAllValentineOrders);
+router.get("/admin/orders",        auth, checkAccess("overall"), getAllValentineOrders);
 router.get("/:slug",               getValentinePage);
 router.patch("/:slug/view",        trackView);
 router.post("/:slug/respond",      recordResponse);

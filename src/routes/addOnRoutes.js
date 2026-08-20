@@ -9,20 +9,21 @@ import {
   getAddOnsExceptCategory
 } from "../controllers/addOnController.js";
 import auth from "../middlewares/authMiddleware.js";
-import { isAdmin } from "../middlewares/isAdmin.js";
+import { checkAccess } from "../middlewares/checkAccess.js";
 const router = express.Router();
+const isCategoryAdmin = checkAccess("category");
 
 // Create AddOn (admin only)
-router.post("/create", auth,isAdmin, createAddOn);
+router.post("/create", auth, isCategoryAdmin, createAddOn);
 
 // Edit AddOn (admin only)
-router.put("/edit/:id",auth, isAdmin, editAddOn);
+router.put("/edit/:id", auth, isCategoryAdmin, editAddOn);
 
 // Soft delete AddOn (admin only)
-router.put("/softDelete/:id",auth, isAdmin, softDeleteAddOn);
+router.put("/softDelete/:id", auth, isCategoryAdmin, softDeleteAddOn);
 
 // Get all AddOns (admin only)
-router.get("/all", auth,isAdmin, getAllAddOns);
+router.get("/all", auth, isCategoryAdmin, getAllAddOns);
 
 // Get AddOn by name (public)
 router.get("/name/:name", getAddOnByName);

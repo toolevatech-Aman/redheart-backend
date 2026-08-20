@@ -8,19 +8,20 @@ import {
   verifyQuestionPayment,
 } from "../controllers/questionController.js";
 import auth from "../middlewares/authMiddleware.js";
-import { isAdmin } from "../middlewares/isAdmin.js";
+import { checkAccess } from "../middlewares/checkAccess.js";
 
 const router = express.Router();
+const isOverallAdmin = checkAccess("overall");
 
 // Add questions (admin) - body: [{ question, type }]
-router.post("/", auth, isAdmin, addQuestions);
+router.post("/", auth, isOverallAdmin, addQuestions);
 // Delete one question (admin)
-router.delete("/:id", auth, isAdmin, deleteQuestion);
+router.delete("/:id", auth, isOverallAdmin, deleteQuestion);
 // Get all questions (public)
 router.get("/", getQuestions);
 
 // Get all submitted answers (admin)
-router.get("/submissions", auth, isAdmin, getSubmissions);
+router.get("/submissions", auth, isOverallAdmin, getSubmissions);
 // Submit answers and create payment order for 499 (no auth)
 // body: [{ question, answer }]
 router.post("/submit", submitAnswers);

@@ -15,12 +15,13 @@ import {
   updateProductsFromCSV
 } from "../controllers/productController.js";
 import auth from "../middlewares/authMiddleware.js";
-import { isAdmin } from "../middlewares/isAdmin.js";
+import { checkAccess } from "../middlewares/checkAccess.js";
 import { importProductsFromCSV } from "../controllers/productController.js";
 import { upload } from "../middlewares/upload.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
 import { cacheResponse } from "../middlewares/cacheMiddleware.js";
 const router = express.Router();
+const isCategoryAdmin = checkAccess("category");
 
 // Public APIs
 router.get("/", getProducts);                        // Search/filter products
@@ -32,24 +33,24 @@ router.get("/:product_id", cacheResponse(3600), getProductById);          // Ful
 router.post("/:product_id/review", auth, updateReview); // Add/edit review — must be logged in
 
 // Admin APIs
-router.post("/", auth, isAdmin, addProduct);
-router.put("/:product_id", auth, isAdmin, editProduct);
-router.patch("/:product_id/delivery-type", auth, isAdmin, updateDeliveryType);
-router.delete("/:product_id", auth, isAdmin, deleteProduct);
+router.post("/", auth, isCategoryAdmin, addProduct);
+router.put("/:product_id", auth, isCategoryAdmin, editProduct);
+router.patch("/:product_id/delivery-type", auth, isCategoryAdmin, updateDeliveryType);
+router.delete("/:product_id", auth, isCategoryAdmin, deleteProduct);
 router.post(
   "/import",
   authMiddleware,      // Must be logged in
-  isAdmin,             // Must be admin
+  isCategoryAdmin,
   upload.single("file"),
   importProductsFromCSV
 );
 
 router.post(
-  "/update",             
-  authMiddleware,         
-  isAdmin,                
+  "/update",
+  authMiddleware,
+  isCategoryAdmin,
   upload.single("file"),
-  updateProductsFromCSV   
+  updateProductsFromCSV
 );
 
 export default router;

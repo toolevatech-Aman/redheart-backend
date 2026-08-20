@@ -6,14 +6,15 @@ import {
 } from "../controllers/pageContentController.js";
 
 import auth from "../middlewares/authMiddleware.js";
-import { isAdmin } from "../middlewares/isAdmin.js";
+import { checkAccess } from "../middlewares/checkAccess.js";
 
 const router = express.Router();
+const isOverallAdmin = checkAccess("overall");
 
 // USER (Public)
 router.get("/", getContentByPage);
 
 // ADMIN (Protected)
-router.post("/admin", auth, isAdmin, upsertPageContent);
-router.get("/admin/all", auth, isAdmin, getAllPageContents);
+router.post("/admin", auth, isOverallAdmin, upsertPageContent);
+router.get("/admin/all", auth, isOverallAdmin, getAllPageContents);
 export default router;

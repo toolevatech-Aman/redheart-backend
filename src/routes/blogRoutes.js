@@ -1,18 +1,18 @@
 import express from "express";
 import authMiddleware from "../middlewares/authMiddleware.js";
-import { isAdmin } from "../middlewares/isAdmin.js";
+import { checkAccess } from "../middlewares/checkAccess.js";
 import { cacheResponse } from "../middlewares/cacheMiddleware.js";
 import {
   listBlogCategories, createBlogCategory, updateBlogCategory, deleteBlogCategory,
   listBlogSubcategories, createBlogSubcategory, updateBlogSubcategory, deleteBlogSubcategory,
 } from "../controllers/blogCategoryController.js";
 import {
-  listBlogPosts, getBlogPostBySlug, listPublishedPosts,
+  listBlogPosts, getBlogPostById, getBlogPostBySlug, listPublishedPosts,
   createBlogPost, updateBlogPost, deleteBlogPost, getBlogsForPage,
 } from "../controllers/blogPostController.js";
 
 const router = express.Router();
-const auth = [authMiddleware, isAdmin];
+const auth = [authMiddleware, checkAccess("seo")];
 
 // ── Categories (admin) ──────────────────────────────────────────────────────
 router.get("/categories",             cacheResponse(3600), listBlogCategories);
@@ -30,6 +30,7 @@ router.delete("/subcategories/:id",   ...auth, deleteBlogSubcategory);
 // catch-all below, or Express would match them as a category+post pair) ────
 router.get("/for-page",               cacheResponse(1800), getBlogsForPage); // Related Blog strip
 router.get("/admin/all",              ...auth, listBlogPosts);
+router.get("/admin/:id",              ...auth, getBlogPostById);
 router.get("/",                       cacheResponse(1800), listPublishedPosts); // /blog hub + /blog/:category
 router.post("/",                      ...auth, createBlogPost);
 router.put("/:id",                    ...auth, updateBlogPost);

@@ -8,7 +8,8 @@ import {
   verifyPayment
 } from '../controllers/orderController.js';
 import auth from '../middlewares/authMiddleware.js';
-import { isAdmin } from '../middlewares/isAdmin.js';
+import { checkAccess } from '../middlewares/checkAccess.js';
+const isOverallAdmin = checkAccess("overall");
 
 const router = express.Router();
 
@@ -31,9 +32,9 @@ router.get('/:orderId', auth, getOrderById);
 // --------------------
 
 // Get all orders
-router.get('/', auth, isAdmin, getAllOrders);
+router.get('/', auth, isOverallAdmin, getAllOrders);
 
 // Update order status
-router.patch('/admin/:orderId/status', auth, isAdmin, updateOrderStatus);
+router.patch('/admin/:orderId/status', auth, isOverallAdmin, updateOrderStatus);
 
 export default router;

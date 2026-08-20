@@ -2,7 +2,7 @@
 import express from "express";
 import { upload } from "../middlewares/upload.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
-import { isAdmin } from "../middlewares/isAdmin.js";
+import { checkAccess } from "../middlewares/checkAccess.js";
 import {
   uploadAndValidate,
   confirmImport,
@@ -17,7 +17,7 @@ import {
 } from "../controllers/exportController.js";
 
 const router = express.Router();
-const auth   = [authMiddleware, isAdmin];
+const auth   = [authMiddleware, checkAccess("category")];
 
 // ── Templates ──────────────────────────────────────────────────────────────
 // GET /api/bulk/template/:category   → download blank upload template

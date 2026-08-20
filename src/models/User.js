@@ -92,6 +92,14 @@ const userSchema = new mongoose.Schema(
       default: "user",
       enum: ["user", "admin"]
     },
+    // Only meaningful when role === "admin". "overall" is a superset that
+    // passes every access-level check; "seo" and "category" restrict an
+    // admin to their respective sections of the admin panel.
+    accessLevel: {
+      type: String,
+      default: "overall",
+      enum: ["overall", "seo", "category"]
+    },
     dateOfBirth: {
       type: Date,
       default: null

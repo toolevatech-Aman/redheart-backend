@@ -103,11 +103,13 @@ export const getAllUsersAdmin = async (req, res) => {
 
       return {
         _id: u._id,
+        userId: u.userId,
         name: u.name,
         email: u.email,
         phone: u.phone,
         avatar: u.avatar,
         role: u.role,
+        accessLevel: u.accessLevel,
         isVerified: u.isVerified,
         addresses: u.addresses || [],
         orderCount: orderInfo?.count || 0,
@@ -124,6 +126,37 @@ export const getAllUsersAdmin = async (req, res) => {
     });
 
     res.json({ success: true, total: result.length, data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ================= ADMIN: UPDATE A USER'S ROLE / ACCESS LEVEL =================
+// Only reachable by "overall" admins (see checkAccess("overall") on the route)
+// — SEO/Category-scoped admins cannot grant themselves or anyone else more access.
+const VALID_ROLES = ["user", "admin"];
+const VALID_ACCESS_LEVELS = ["overall", "seo", "category"];
+
+export const updateUserAccess = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role, accessLevel } = req.body;
+
+    if (role !== undefined && !VALID_ROLES.includes(role)) {
+      return res.status(400).json({ message: `role must be one of: ${VALID_ROLES.join(", ")}` });
+    }
+    if (accessLevel !== undefined && !VALID_ACCESS_LEVELS.includes(accessLevel)) {
+      return res.status(400).json({ message: `accessLevel must be one of: ${VALID_ACCESS_LEVELS.join(", ")}` });
+    }
+
+    const update = {};
+    if (role !== undefined) update.role = role;
+    if (accessLevel !== undefined) update.accessLevel = accessLevel;
+
+    const user = await User.findOneAndUpdate({ userId: id }, update, { new: true });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    res.json({ success: true, user });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -1,7 +1,7 @@
 // categoryConfigRoutes.js
 import express from "express";
 import authMiddleware from "../middlewares/authMiddleware.js";
-import { isAdmin } from "../middlewares/isAdmin.js";
+import { checkAccess } from "../middlewares/checkAccess.js";
 import { cacheResponse } from "../middlewares/cacheMiddleware.js";
 import {
   listConfigs,
@@ -14,7 +14,7 @@ import {
 } from "../controllers/categoryConfigController.js";
 
 const router = express.Router();
-const auth   = [authMiddleware, isAdmin];
+const auth   = [authMiddleware, checkAccess("category")];
 
 // Public
 router.get("/",     cacheResponse(3600), listConfigs);

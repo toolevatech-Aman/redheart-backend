@@ -32,7 +32,7 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 // Helper
 const generateToken = (user) => {
   return jwt.sign(
-    { userId: user.userId, role: user.role }, 
+    { userId: user.userId, role: user.role, accessLevel: user.accessLevel },
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
   );
