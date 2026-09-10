@@ -87,6 +87,12 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+    // Set on every successful login (phone OTP, email OTP, Google) — used
+    // by the admin Users page to sort by recent activity.
+    lastLoginAt: {
+      type: Date,
+      default: null
+    },
     role: {
       type: String,
       default: "user",

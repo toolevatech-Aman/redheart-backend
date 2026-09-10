@@ -228,6 +228,7 @@ export const verifyOtp = async (req, res) => {
     // Save token in DB
     user.tokens = user.tokens || [];
     user.tokens.push({ token, createdAt: new Date() });
+    user.lastLoginAt = new Date();
     await user.save();
 
     res.json({
@@ -285,6 +286,7 @@ export const googleAuth = async (req, res) => {
     const token = generateToken(user);
     user.tokens = user.tokens || [];
     user.tokens.push({ token, createdAt: new Date() });
+    user.lastLoginAt = new Date();
     await user.save();
 
     res.json({ message: "Login Successful", token, user });
@@ -376,6 +378,7 @@ export const emailVerifyOtp = async (req, res) => {
     const token = generateToken(user);
     user.tokens = user.tokens || [];
     user.tokens.push({ token, createdAt: new Date() });
+    user.lastLoginAt = new Date();
     await user.save();
 
     // Only delete from OTP store after everything succeeded

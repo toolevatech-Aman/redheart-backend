@@ -102,6 +102,15 @@ export const getAllUsersAdmin = async (req, res) => {
         ? { ...cart.buyNowItem, product_url: productUrlMap[String(cart.buyNowItem.productId)] || null }
         : null;
 
+      // Single "most recent activity" timestamp — the latest of login,
+      // cart/buy-now update (same Cart document, so one field covers both),
+      // or account creation. Precomputed here so the admin panel can just
+      // sort by this one field instead of re-deriving it client-side.
+      const activityCandidates = [u.lastLoginAt, cart?.updatedAt, u.createdAt].filter(Boolean);
+      const lastActivityAt = activityCandidates.length
+        ? new Date(Math.max(...activityCandidates.map(d => new Date(d).getTime())))
+        : null;
+
       return {
         _id: u._id,
         userId: u.userId,
@@ -122,6 +131,8 @@ export const getAllUsersAdmin = async (req, res) => {
         cartValue,
         buyNowItem,
         cartUpdatedAt: cart?.updatedAt || null,
+        lastLoginAt: u.lastLoginAt || null,
+        lastActivityAt,
         createdAt: u.createdAt,
       };
     });
