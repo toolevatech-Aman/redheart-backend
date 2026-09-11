@@ -54,6 +54,10 @@ const orderSchema = new mongoose.Schema({
 
   razorpayOrderId: { type: String },
   razorpayPaymentId: { type: String },
+  // GA4 client_id, captured client-side at checkout — lets the Razorpay
+  // webhook report a server-side `purchase` event if the browser never
+  // returns to confirm (see orderController.razorpayOrderWebhook).
+  gaClientId: { type: String, default: "" },
   deliveryDate: Date,
   deliverySlot: String,
   shippingCharges: Number,

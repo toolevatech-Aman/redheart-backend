@@ -4,6 +4,7 @@ import { getRazorpayInstance } from '../services/razorpay.js';
 import { sendOrderAlertEmail } from '../utils/orderAlertMail.js';
 import { recordVendorOutcome, recordItemVendorOutcomes } from './vendorController.js';
 import { validateAndComputeCoupon, markCouponUsed } from '../utils/couponEngine.js';
+import { sendGA4Purchase } from '../utils/ga4.js';
 
 import { createHmac } from "crypto";
 
@@ -164,6 +165,67 @@ export const verifyPayment = async (req, res) => {
     });
   }
 };
+// ─── POST /api/orders/webhook — Razorpay "payment.captured" ─────────────────
+// Recovery path for prepaid orders whose browser never came back to call
+// verify-payment (closed tab, killed UPI-app redirect, etc.). Without this,
+// such an order stays paymentStatus "PENDING" forever — invisible in
+// getAllOrders (which only returns COD/PAID) even though the customer's
+// money went through — and its GA4 `purchase` event never fires either,
+// since that only fires client-side on /order-success.
+//
+// If the client already confirmed by the time this arrives (the normal,
+// common case), the order is already "PAID" and this is a no-op — GA4
+// reporting stays with the client-side event on /order-success, so a
+// normal order is never double-counted. Only the recovery case (still
+// "PENDING" here) reports GA4 itself, since the client-side event will
+// never fire for it.
+export const razorpayOrderWebhook = async (req, res) => {
+  try {
+    const webhookSecret = process.env.RAZORPAY_ORDER_WEBHOOK_SECRET || process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      console.error("RAZORPAY_WEBHOOK_SECRET not set — order webhook disabled");
+      return res.status(200).json({ ok: true }); // 200 so Razorpay doesn't retry
+    }
+
+    const signature = req.headers["x-razorpay-signature"];
+    const body = req.rawBody;
+    if (!signature || !body) return res.status(400).json({ error: "missing signature or body" });
+
+    const expected = createHmac("sha256", webhookSecret).update(body).digest("hex");
+    if (expected !== signature) return res.status(400).json({ error: "invalid webhook signature" });
+
+    const event = JSON.parse(body);
+    if (event.event !== "payment.captured") return res.status(200).json({ ok: true });
+
+    const payment = event.payload?.payment?.entity;
+    const razorpayOrderId = payment?.order_id;
+    if (!razorpayOrderId) return res.status(200).json({ ok: true });
+
+    const order = await Order.findOne({ razorpayOrderId });
+    if (!order) return res.status(200).json({ ok: true });
+
+    if (order.paymentStatus !== "PAID") {
+      order.paymentStatus = "PAID";
+      order.razorpayPaymentId = payment.id;
+      order.orderStatus = "Processing";
+      await order.save();
+
+      if (order.coupanApplied) {
+        markCouponUsed({ code: order.coupanApplied, source: order.coupanSource, userId: order.userId })
+          .catch((err) => console.error("markCouponUsed (webhook) failed:", err.message));
+      }
+      sendGA4Purchase(order).catch((err) => console.error("sendGA4Purchase failed:", err.message));
+
+      console.log(`[webhook] Recovered order ${order.orderId} via payment.captured (client never confirmed)`);
+    }
+
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error("razorpayOrderWebhook error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+};
+
 // Get all orders (admin) — enriched with customer details and product links
 const PRODUCT_CATEGORY_SLUG = { Flowers: "flowers", Cakes: "cakes", Plants: "plants" };
 

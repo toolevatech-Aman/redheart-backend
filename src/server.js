@@ -29,17 +29,24 @@ import vendorRoutes from './routes/vendorRoutes.js';
 import couponRoutes from './routes/couponRoutes.js';
 import blogRoutes from './routes/blogRoutes.js';
 import { razorpayWebhook, runAbandonmentEmails } from './controllers/valentineController.js';
+import { razorpayOrderWebhook } from './controllers/orderController.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
 import { runDailyIndexNowSubmit } from './utils/dailyIndexNowSubmit.js';
 import { runVendorReconciliation } from './utils/reconcileVendorStats.js';
 const app = express();
 
-// Razorpay webhook — must receive raw body BEFORE express.json parses it
+// Razorpay webhooks — must receive raw body BEFORE express.json parses it
 app.post(
   "/api/valentine/webhook",
   express.raw({ type: "application/json" }),
   (req, res, next) => { req.rawBody = req.body.toString("utf8"); next(); },
   razorpayWebhook
+);
+app.post(
+  "/api/orders/webhook",
+  express.raw({ type: "application/json" }),
+  (req, res, next) => { req.rawBody = req.body.toString("utf8"); next(); },
+  razorpayOrderWebhook
 );
 
 // Middlewares
