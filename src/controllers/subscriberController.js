@@ -16,6 +16,7 @@ export const createSubscriber = async (req, res) => {
     const {
       email, phone, type, plan,
       razorpayCustomerId, razorpaySubscriptionId, subscriptionStatus,
+      gaClientId, firstChargeReported,
     } = req.body;
 
     if (!email && !phone) {
@@ -36,6 +37,8 @@ export const createSubscriber = async (req, res) => {
           ...(razorpayCustomerId && { razorpayCustomerId }),
           ...(razorpaySubscriptionId && { razorpaySubscriptionId }),
           ...(subscriptionStatus && { subscriptionStatus }),
+          ...(gaClientId && { gaClientId }),
+          ...(typeof firstChargeReported === "boolean" && { firstChargeReported }),
         },
         $setOnInsert: { subscribedAt: new Date() },
       },

@@ -30,6 +30,7 @@ import couponRoutes from './routes/couponRoutes.js';
 import blogRoutes from './routes/blogRoutes.js';
 import { razorpayWebhook, runAbandonmentEmails } from './controllers/valentineController.js';
 import { razorpayOrderWebhook } from './controllers/orderController.js';
+import { razorpaySubscriptionWebhook } from './controllers/subscriptionController.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
 import { runDailyIndexNowSubmit } from './utils/dailyIndexNowSubmit.js';
 import { runVendorReconciliation } from './utils/reconcileVendorStats.js';
@@ -47,6 +48,12 @@ app.post(
   express.raw({ type: "application/json" }),
   (req, res, next) => { req.rawBody = req.body.toString("utf8"); next(); },
   razorpayOrderWebhook
+);
+app.post(
+  "/api/subscriptions/webhook",
+  express.raw({ type: "application/json" }),
+  (req, res, next) => { req.rawBody = req.body.toString("utf8"); next(); },
+  razorpaySubscriptionWebhook
 );
 
 // Middlewares
