@@ -259,6 +259,7 @@ export const googleAuth = async (req, res) => {
 
     if (!user && email) user = await User.findOne({ email });
 
+    const isNewUser = !user;
     if (!user) {
       const defaultCoupons = [
         { code: `NEW10`, discountType: "percentage", discountValue: 10, minOrderValue: 599, maxDiscount: 120, isUsed: false },
@@ -289,7 +290,7 @@ export const googleAuth = async (req, res) => {
     user.lastLoginAt = new Date();
     await user.save();
 
-    res.json({ message: "Login Successful", token, user });
+    res.json({ message: "Login Successful", token, user, isNewUser });
   } catch (err) {
     console.error("Google auth error:", err);
     res.status(500).json({ error: err.message });
