@@ -21,6 +21,7 @@ const valentinePageSchema = new mongoose.Schema(
     whatsapp:      { type: String, default: "" },          // waitlist WhatsApp number
     receiverWhatsapp: { type: String, default: "" },       // recipient's WhatsApp number, for admin to send the link
     sendAt:        { type: String, default: "" },          // preferred date+time (datetime-local string) to WhatsApp the link
+    unlockAt:      { type: String, default: "" },          // datetime-local string — page stays locked (no reveal) until this moment
 
     // Tier: free | popular | lifetime
     tier: { type: String, enum: ["free", "popular", "lifetime"], default: "free" },

@@ -545,7 +545,7 @@ export const getAllValentineOrders = async (req, res) => {
           "slug occasion occasionKey partnerName yourName recipientName tier " +
           "amountPaid razorpayPaymentId razorpayOrderId giftId deliveryDate " +
           "deliverySlot deliveryAddress deliveryPhone email whatsapp responded " +
-          "receiverWhatsapp sendAt respondedAt createdAt updatedAt"
+          "receiverWhatsapp sendAt unlockAt respondedAt createdAt updatedAt"
         )
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
