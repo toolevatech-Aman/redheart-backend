@@ -1,5 +1,6 @@
 import ShayariSubmission from "../models/ShayariSubmission.js";
 import { revalidateTags } from "../utils/revalidate.js";
+import { runDailyContentDrop } from "../utils/dailyContentDrop.js";
 
 // GET /api/shayari-submissions — admin: list all submissions
 export const getAllSubmissions = async (req, res) => {
@@ -68,5 +69,22 @@ export const updateSubmissionStatus = async (req, res) => {
     res.json({ success: true, data: submission });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/shayari-submissions/run-daily-drop — manual trigger for the
+// daily AI content drop (runs automatically every 24h — see server.js), so
+// it can be tested/re-run on demand instead of waiting for the schedule.
+export const runContentDropNow = async (req, res) => {
+  const secret = req.headers["x-content-drop-secret"] || req.body?.secret;
+  if (!process.env.CONTENT_DROP_SECRET || secret !== process.env.CONTENT_DROP_SECRET) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  try {
+    const result = await runDailyContentDrop();
+    return res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    console.error("runContentDropNow error:", err);
+    return res.status(500).json({ error: "Server error" });
   }
 };

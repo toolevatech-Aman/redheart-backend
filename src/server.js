@@ -33,6 +33,7 @@ import { razorpayOrderWebhook } from './controllers/orderController.js';
 import { razorpaySubscriptionWebhook } from './controllers/subscriptionController.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
 import { runDailyIndexNowSubmit } from './utils/dailyIndexNowSubmit.js';
+import { runDailyContentDrop } from './utils/dailyContentDrop.js';
 import { runVendorReconciliation } from './utils/reconcileVendorStats.js';
 const app = express();
 
@@ -131,6 +132,16 @@ setTimeout(() => {
     runDailyIndexNowSubmit().then(r => console.log("[indexnow-daily]", r)).catch(err => console.error("[indexnow-daily]", err.message));
   }, 24 * 60 * 60 * 1000);
 }, 10 * 60 * 1000);
+
+// Daily content drop — 2 new AI-written shayari/quotes per category (20
+// categories), inserted as pre-approved submissions so they appear via the
+// same path as approved user submissions. See utils/dailyContentDrop.js.
+setTimeout(() => {
+  runDailyContentDrop().then(r => console.log("[content-drop]", r)).catch(err => console.error("[content-drop]", err.message));
+  setInterval(() => {
+    runDailyContentDrop().then(r => console.log("[content-drop]", r)).catch(err => console.error("[content-drop]", err.message));
+  }, 24 * 60 * 60 * 1000);
+}, 12 * 60 * 1000);
 
 // Daily vendor stats reconciliation — rebuilds Vendor.stats/PinCodeStat from
 // actual Order data so drift from reassigning vendors (the old vendor's

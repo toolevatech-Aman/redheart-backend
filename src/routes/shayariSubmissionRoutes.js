@@ -6,6 +6,7 @@ import {
   getPublishedSubmissions,
   createSubmission,
   updateSubmissionStatus,
+  runContentDropNow,
 } from "../controllers/shayariSubmissionController.js";
 
 const router = express.Router();
@@ -15,6 +16,7 @@ const isOverallAdmin = checkAccess("overall");
 router.get("/published", getPublishedSubmissions); // public — approved-only feed for live pages
 router.get("/",     auth, isOverallAdmin, getAllSubmissions);
 router.post("/",    createSubmission); // public — anyone can submit
+router.post("/run-daily-drop", runContentDropNow); // secret-protected — manual trigger for the daily AI content job
 router.patch("/:id", auth, isOverallAdmin, updateSubmissionStatus);
 
 export default router;
