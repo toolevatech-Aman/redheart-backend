@@ -33,17 +33,17 @@ const AUTHOR_NAME = "RedHeart Daily ✨";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Retries transient rate-limit/server errors with backoff — a burst of 20
-// back-to-back calls hit the free tier's per-minute limit in testing, so
-// both spacing (see the caller's delay between categories) and this retry
-// matter for a clean run.
+// Retries transient rate-limit/server errors with backoff. This job runs
+// once a day in the background with nobody waiting on it, so there's no
+// reason to rush — generous spacing (see the caller's delay between
+// categories) and backoff here matter far more than total runtime.
 async function generateTwoWithRetry(cat, attempt = 1) {
   try {
     return await generateTwo(cat);
   } catch (err) {
     const retryable = /Gemini API (429|500|503)/.test(err.message);
-    if (retryable && attempt < 3) {
-      await sleep(attempt * 8000);
+    if (retryable && attempt < 4) {
+      await sleep(attempt * 20000);
       return generateTwoWithRetry(cat, attempt + 1);
     }
     throw err;
@@ -116,7 +116,7 @@ export async function runDailyContentDrop() {
   const tags = [];
 
   for (const [i, cat] of CATEGORIES.entries()) {
-    if (i > 0) await sleep(4000); // stay under the free tier's per-minute rate limit
+    if (i > 0) await sleep(8000); // stay under the free tier's per-minute rate limit
     try {
       const items = await generateTwoWithRetry(cat);
       for (const shayari of items) {
