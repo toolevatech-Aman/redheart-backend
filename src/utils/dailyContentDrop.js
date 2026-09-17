@@ -31,6 +31,25 @@ const CATEGORIES = [
 
 const AUTHOR_NAME = "RedHeart Daily ✨";
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Retries transient rate-limit/server errors with backoff — a burst of 20
+// back-to-back calls hit the free tier's per-minute limit in testing, so
+// both spacing (see the caller's delay between categories) and this retry
+// matter for a clean run.
+async function generateTwoWithRetry(cat, attempt = 1) {
+  try {
+    return await generateTwo(cat);
+  } catch (err) {
+    const retryable = /Gemini API (429|500|503)/.test(err.message);
+    if (retryable && attempt < 3) {
+      await sleep(attempt * 8000);
+      return generateTwoWithRetry(cat, attempt + 1);
+    }
+    throw err;
+  }
+}
+
 async function generateTwo({ type, label, mood }) {
   const isShayari = type === "shayari";
   const system = isShayari
@@ -96,9 +115,10 @@ export async function runDailyContentDrop() {
   let failed = 0;
   const tags = [];
 
-  for (const cat of CATEGORIES) {
+  for (const [i, cat] of CATEGORIES.entries()) {
+    if (i > 0) await sleep(4000); // stay under the free tier's per-minute rate limit
     try {
-      const items = await generateTwo(cat);
+      const items = await generateTwoWithRetry(cat);
       for (const shayari of items) {
         await ShayariSubmission.create({
           shayari,
