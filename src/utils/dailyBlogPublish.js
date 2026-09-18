@@ -10,12 +10,15 @@ import BlogPost from "../models/BlogPost.js";
 import { BlogCategory } from "../models/BlogCategory.js";
 import { invalidateCache } from "../middlewares/cacheMiddleware.js";
 
-const VERTICALS = [
+// Exported so the admin queue-status endpoint (getBlogQueueStatus) shares
+// the exact same vertical/author/rate config instead of a second copy that
+// could drift out of sync.
+export const VERTICALS = [
   { categorySlug: "flower", author: "Trishna" },
   { categorySlug: "cakes",  author: "Pallavi" },
   { categorySlug: "plants", author: "Maya" },
 ];
-const PER_VERTICAL_PER_DAY = 3;
+export const PER_VERTICAL_PER_DAY = 3;
 
 export async function runDailyBlogPublish() {
   const results = [];

@@ -1,6 +1,7 @@
 import BlogPost from "../models/BlogPost.js";
+import { BlogCategory } from "../models/BlogCategory.js";
 import { invalidateCache } from "../middlewares/cacheMiddleware.js";
-import { runDailyBlogPublish } from "../utils/dailyBlogPublish.js";
+import { runDailyBlogPublish, VERTICALS, PER_VERTICAL_PER_DAY } from "../utils/dailyBlogPublish.js";
 
 // ── Admin: list all posts (any status), basic filtering ────────────────────
 export async function listBlogPosts(req, res) {
@@ -217,6 +218,42 @@ export async function getBlogsForPage(req, res) {
     return res.json(ranked);
   } catch (err) {
     console.error("getBlogsForPage error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
+
+// GET /api/blogs/admin/queue-status — admin: per-vertical draft queue depth
+// and an estimated days-left-at-current-rate figure, for the "how much
+// runway does the automated pipeline have left" admin view.
+export async function getBlogQueueStatus(req, res) {
+  try {
+    const results = await Promise.all(
+      VERTICALS.map(async (v) => {
+        const cat = await BlogCategory.findOne({ slug: v.categorySlug }).lean();
+        if (!cat) return { vertical: v.categorySlug, author: v.author, categoryName: v.categorySlug, error: "category not found" };
+
+        const [drafts, published] = await Promise.all([
+          BlogPost.countDocuments({ category: cat._id, status: "draft" }),
+          BlogPost.countDocuments({ category: cat._id, status: "published" }),
+        ]);
+
+        return {
+          vertical: v.categorySlug,
+          categoryName: cat.name,
+          author: v.author,
+          draftsRemaining: drafts,
+          published,
+          perDay: PER_VERTICAL_PER_DAY,
+          daysLeft: Math.ceil(drafts / PER_VERTICAL_PER_DAY),
+          runsOutOn: drafts > 0
+            ? new Date(Date.now() + Math.ceil(drafts / PER_VERTICAL_PER_DAY) * 24 * 60 * 60 * 1000)
+            : null,
+        };
+      })
+    );
+    return res.json({ perDayTotal: results.reduce((s, r) => s + (r.perDay || 0), 0), verticals: results });
+  } catch (err) {
+    console.error("getBlogQueueStatus error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 }

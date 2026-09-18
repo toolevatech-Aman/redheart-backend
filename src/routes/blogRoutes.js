@@ -9,6 +9,7 @@ import {
 import {
   listBlogPosts, getBlogPostById, getBlogPostBySlug, listPublishedPosts,
   createBlogPost, updateBlogPost, deleteBlogPost, getBlogsForPage, runBlogPublishNow,
+  getBlogQueueStatus,
 } from "../controllers/blogPostController.js";
 
 const router = express.Router();
@@ -31,6 +32,7 @@ router.delete("/subcategories/:id",   ...auth, deleteBlogSubcategory);
 router.get("/for-page",               cacheResponse(1800), getBlogsForPage); // Related Blog strip
 router.post("/run-daily-publish",     runBlogPublishNow); // secret-protected — manual trigger for the daily blog publish job
 router.get("/admin/all",              ...auth, listBlogPosts);
+router.get("/admin/queue-status",     ...auth, getBlogQueueStatus); // before /admin/:id or that catch-all would swallow this path
 router.get("/admin/:id",              ...auth, getBlogPostById);
 router.get("/",                       cacheResponse(1800), listPublishedPosts); // /blog hub + /blog/:category
 router.post("/",                      ...auth, createBlogPost);
