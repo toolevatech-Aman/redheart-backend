@@ -1,5 +1,6 @@
 import BlogPost from "../models/BlogPost.js";
 import { invalidateCache } from "../middlewares/cacheMiddleware.js";
+import { runDailyBlogPublish } from "../utils/dailyBlogPublish.js";
 
 // ── Admin: list all posts (any status), basic filtering ────────────────────
 export async function listBlogPosts(req, res) {
@@ -216,6 +217,23 @@ export async function getBlogsForPage(req, res) {
     return res.json(ranked);
   } catch (err) {
     console.error("getBlogsForPage error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
+
+// POST /api/blogs/run-daily-publish — manual trigger for the daily blog
+// publish job (runs automatically every 24h — see server.js), so it can be
+// tested/re-run on demand instead of waiting for the schedule.
+export async function runBlogPublishNow(req, res) {
+  const secret = req.headers["x-blog-publish-secret"] || req.body?.secret;
+  if (!process.env.BLOG_PUBLISH_SECRET || secret !== process.env.BLOG_PUBLISH_SECRET) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  try {
+    const result = await runDailyBlogPublish();
+    return res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    console.error("runBlogPublishNow error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 }

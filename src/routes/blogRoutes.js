@@ -8,7 +8,7 @@ import {
 } from "../controllers/blogCategoryController.js";
 import {
   listBlogPosts, getBlogPostById, getBlogPostBySlug, listPublishedPosts,
-  createBlogPost, updateBlogPost, deleteBlogPost, getBlogsForPage,
+  createBlogPost, updateBlogPost, deleteBlogPost, getBlogsForPage, runBlogPublishNow,
 } from "../controllers/blogPostController.js";
 
 const router = express.Router();
@@ -29,6 +29,7 @@ router.delete("/subcategories/:id",   ...auth, deleteBlogSubcategory);
 // ── Posts — public reads (static paths BEFORE the /:categorySlug/:slug
 // catch-all below, or Express would match them as a category+post pair) ────
 router.get("/for-page",               cacheResponse(1800), getBlogsForPage); // Related Blog strip
+router.post("/run-daily-publish",     runBlogPublishNow); // secret-protected — manual trigger for the daily blog publish job
 router.get("/admin/all",              ...auth, listBlogPosts);
 router.get("/admin/:id",              ...auth, getBlogPostById);
 router.get("/",                       cacheResponse(1800), listPublishedPosts); // /blog hub + /blog/:category

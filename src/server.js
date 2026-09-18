@@ -36,6 +36,7 @@ import { openaiProductFeed } from './controllers/openaiFeedController.js';
 import { refreshOpenAIProductFeedCache } from './utils/openaiProductFeed.js';
 import { runDailyIndexNowSubmit } from './utils/dailyIndexNowSubmit.js';
 import { runDailyContentDrop } from './utils/dailyContentDrop.js';
+import { runDailyBlogPublish } from './utils/dailyBlogPublish.js';
 import { runVendorReconciliation } from './utils/reconcileVendorStats.js';
 const app = express();
 
@@ -172,6 +173,16 @@ setTimeout(() => {
     runDailyContentDrop().then(r => console.log("[content-drop]", r)).catch(err => console.error("[content-drop]", err.message));
   }, 24 * 60 * 60 * 1000);
 }, 12 * 60 * 1000);
+
+// Daily blog publish — releases the next 3 draft posts per product vertical
+// (9/day total: Flowers→Trishna, Cakes→Pallavi, Plants→Maya), seeded ahead
+// of time by scripts/import-blog-source.mjs. See utils/dailyBlogPublish.js.
+setTimeout(() => {
+  runDailyBlogPublish().then(r => console.log("[blog-publish]", r)).catch(err => console.error("[blog-publish]", err.message));
+  setInterval(() => {
+    runDailyBlogPublish().then(r => console.log("[blog-publish]", r)).catch(err => console.error("[blog-publish]", err.message));
+  }, 24 * 60 * 60 * 1000);
+}, 20 * 60 * 1000);
 
 // Daily vendor stats reconciliation — rebuilds Vendor.stats/PinCodeStat from
 // actual Order data so drift from reassigning vendors (the old vendor's
