@@ -72,7 +72,14 @@ app.get("/", (req, res) => {
 
 // Block search engines from indexing the backend API
 app.get("/robots.txt", (req, res) => {
-  res.type("text/plain").send("User-agent: *\nDisallow: /");
+  // Blanket-disallow for the backend generally (this is an API, not a site
+  // meant for search indexing) — with an explicit exception for the OpenAI
+  // Commerce feed, since its "Hosted URL" fetcher respects robots.txt and
+  // was refusing to connect ("Connection failed") while the blanket
+  // Disallow: / covered it too.
+  res.type("text/plain").send(
+    "User-agent: *\nDisallow: /\nAllow: /openai-product-feed.jsonl"
+  );
 });
 
 // Tell crawlers to never index any backend response
