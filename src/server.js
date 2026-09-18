@@ -32,6 +32,7 @@ import { razorpayWebhook, runAbandonmentEmails } from './controllers/valentineCo
 import { razorpayOrderWebhook } from './controllers/orderController.js';
 import { razorpaySubscriptionWebhook } from './controllers/subscriptionController.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
+import { openaiProductFeed } from './controllers/openaiFeedController.js';
 import { runDailyIndexNowSubmit } from './utils/dailyIndexNowSubmit.js';
 import { runDailyContentDrop } from './utils/dailyContentDrop.js';
 import { runVendorReconciliation } from './utils/reconcileVendorStats.js';
@@ -103,6 +104,7 @@ app.use("/api/coupons",         couponRoutes);
 
 // ── Sitemaps (public, no /api prefix) ────────────────────────────────────────
 app.get("/sitemap_cities.xml", citiesSitemap);
+app.get("/openai-product-feed.jsonl", openaiProductFeed);
 
 
 // Connect DB
