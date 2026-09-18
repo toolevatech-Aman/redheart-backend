@@ -83,9 +83,16 @@ app.get("/robots.txt", (req, res) => {
   );
 });
 
-// Tell crawlers to never index any backend response
+// Tell crawlers to never index any backend response — except the OpenAI
+// product feed, which needs to be fetchable by their Hosted URL connector;
+// "noindex, nofollow" is a search-indexing signal, not a fetch-permission
+// one, but a strict robots-respecting fetcher could plausibly treat it as
+// one, so it's excluded here the same way robots.txt already carves an
+// Allow for this one path.
 app.use((req, res, next) => {
-  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  if (req.path !== "/openai-product-feed.jsonl") {
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  }
   next();
 });
 

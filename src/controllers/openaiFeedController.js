@@ -12,7 +12,11 @@ import { getCachedOpenAIProductFeed } from "../utils/openaiProductFeed.js";
 export const openaiProductFeed = async (req, res) => {
   try {
     const { jsonl } = await getCachedOpenAIProductFeed();
-    res.setHeader("Content-Type", "application/jsonl; charset=utf-8");
+    // "application/jsonl" isn't a registered IANA media type — a strict
+    // validator could plausibly reject the connection over an unrecognized
+    // Content-Type. application/x-ndjson is the conventional type for
+    // newline-delimited JSON and far more likely to be recognized.
+    res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
     res.setHeader("Cache-Control", "public, max-age=3600");
     return res.send(jsonl);
   } catch (err) {
