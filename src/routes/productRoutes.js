@@ -24,7 +24,7 @@ const router = express.Router();
 const isCategoryAdmin = checkAccess("category");
 
 // Public APIs
-router.get("/", getProducts);                        // Search/filter products
+router.get("/", cacheResponse(120), getProducts);     // Search/filter products (2min cache — matches search-result freshness expectations)
 router.get("/all-slugs", cacheResponse(3600), getAllProductSlugs);        // Lightweight list for sitemap
 router.post("/by-ids", getProductsByIds);            // Fetch multiple products by _id array
 router.get("/for-page", getProductsForPage);        // Fetch all products for a page (admin sequencer)

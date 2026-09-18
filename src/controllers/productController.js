@@ -35,6 +35,23 @@ import csv from "csv-parser";
 //     res.status(500).json({ error: err.message });
 //   }
 // };
+const SELECT_FIELDS =
+  "product_id name slug sku quantity original_price selling_price short_summary media categorization";
+
+// Plain-substring fallback used only when the ranked $text search finds
+// nothing — e.g. a typo, or a query too short/odd for MongoDB's text index
+// (which matches whole stemmed words, not substrings: "rosebouquet" as one
+// word won't match a "name" of "Rose Bouquet"). Keeps the old permissive
+// behavior as a safety net rather than a hard dead end.
+function regexSearchOr(searchField) {
+  return [
+    { name: { $regex: searchField, $options: "i" } },
+    { description: { $regex: searchField, $options: "i" } },
+    { slug: { $regex: searchField, $options: "i" } },
+    { "product_attributes.color": { $regex: searchField, $options: "i" } },
+  ];
+}
+
 export const getProducts = async (req, res) => {
   try {
     const {
@@ -51,37 +68,22 @@ export const getProducts = async (req, res) => {
       limit = 10
     } = req.query;
 
-    let query = {};
+    // ---------- Base filters (everything except search) ----------
+    // Built separately from the search clause so a search term and the
+    // city filter's own $or can never collide/overwrite each other — that
+    // was a real bug before (available_cities silently discarded searchField).
+    const baseFilters = {};
+    if (color) baseFilters["product_attributes.color"] = color;
+    if (subcategory_name) baseFilters["categorization.subcategory_name"] = subcategory_name;
+    if (category_name) baseFilters["categorization.category_name"] = category_name;
+    if (type) baseFilters["categorization.type"] = type;
+    if (festival_tags) baseFilters["categorization.festival_tags"] = { $in: festival_tags.split(",") };
+    if (occasion_tags) baseFilters["categorization.occasion_tags"] = { $in: occasion_tags.split(",") };
+    if (relationship) baseFilters["categorization.relationship"] = { $in: relationship.split(",") };
 
-    // ---------- Search ----------
-    if (searchField) {
-      query.$or = [
-        { name: { $regex: searchField, $options: "i" } },
-        { description: { $regex: searchField, $options: "i" } },
-        { slug: { $regex: searchField, $options: "i" } },
-        { "product_attributes.color": { $regex: searchField, $options: "i" } },
-      ];
-    }
-
-    // ---------- Filters ----------
-    if (color) query["product_attributes.color"] = color;
-    if (subcategory_name) query["categorization.subcategory_name"] = subcategory_name;
-    if (category_name) query["categorization.category_name"] = category_name;
-    if (type) query["categorization.type"] = type;
-
-    if (festival_tags)
-      query["categorization.festival_tags"] = { $in: festival_tags.split(",") };
-
-    if (occasion_tags)
-      query["categorization.occasion_tags"] = { $in: occasion_tags.split(",") };
-
-    if (relationship)
-      query["categorization.relationship"] = { $in: relationship.split(",") };
-
-    // City page filter: show "India" (global) products + exact-city products
     if (available_cities) {
       const cityName = available_cities.trim();
-      query.$or = [
+      baseFilters.$or = [
         { "product_attributes.available_cities": "India" },
         { "product_attributes.available_cities": { $regex: new RegExp(`^${cityName}$`, "i") } },
       ];
@@ -92,15 +94,37 @@ export const getProducts = async (req, res) => {
     const limitNumber = Number(limit);
     const skip = (pageNumber - 1) * limitNumber;
 
-    // ---------- Query ----------
-    const products = await Product.find(query)
-      .select(
-        "product_id name slug sku quantity original_price selling_price short_summary media categorization"
-      )
-      .skip(skip)
-      .limit(limitNumber);
+    let products, total;
 
-    const total = await Product.countDocuments(query);
+    if (searchField?.trim()) {
+      // Ranked full-text search (see scripts/create-search-index.mjs for the
+      // weighted text index this relies on) — a match in the product name
+      // now outranks an incidental mention buried in the description,
+      // instead of every $regex match being treated as equally relevant.
+      const textQuery = { ...baseFilters, $text: { $search: searchField.trim() } };
+      total = await Product.countDocuments(textQuery);
+
+      if (total > 0) {
+        products = await Product.find(textQuery, { score: { $meta: "textScore" } })
+          .select(SELECT_FIELDS)
+          .sort({ score: { $meta: "textScore" } })
+          .skip(skip)
+          .limit(limitNumber);
+      } else {
+        // No stemmed-word match — fall back to substring matching so a
+        // typo or partial word ("rosebo") still returns something instead
+        // of a hard "no results".
+        const fallbackQuery = { ...baseFilters, $or: regexSearchOr(searchField.trim()) };
+        total = await Product.countDocuments(fallbackQuery);
+        products = await Product.find(fallbackQuery)
+          .select(SELECT_FIELDS)
+          .skip(skip)
+          .limit(limitNumber);
+      }
+    } else {
+      products = await Product.find(baseFilters).select(SELECT_FIELDS).skip(skip).limit(limitNumber);
+      total = await Product.countDocuments(baseFilters);
+    }
 
     // ---------- Response ----------
     res.json({
