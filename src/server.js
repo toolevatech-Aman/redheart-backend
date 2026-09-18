@@ -33,6 +33,7 @@ import { razorpayOrderWebhook } from './controllers/orderController.js';
 import { razorpaySubscriptionWebhook } from './controllers/subscriptionController.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
 import { openaiProductFeed } from './controllers/openaiFeedController.js';
+import { refreshOpenAIProductFeedCache } from './utils/openaiProductFeed.js';
 import { runDailyIndexNowSubmit } from './utils/dailyIndexNowSubmit.js';
 import { runDailyContentDrop } from './utils/dailyContentDrop.js';
 import { runVendorReconciliation } from './utils/reconcileVendorStats.js';
@@ -141,6 +142,19 @@ setTimeout(() => {
     runDailyIndexNowSubmit().then(r => console.log("[indexnow-daily]", r)).catch(err => console.error("[indexnow-daily]", err.message));
   }, 24 * 60 * 60 * 1000);
 }, 10 * 60 * 1000);
+
+// Warm the OpenAI product-feed cache immediately (no startup delay, unlike
+// the other jobs below) — the live route serves from this cache rather than
+// querying the full catalog per-request, and it needs to already be warm
+// the moment anything (a fetcher, a person testing the URL) hits it.
+refreshOpenAIProductFeedCache()
+  .then(r => console.log("[openai-feed] cache warmed:", r.rowCount, "rows"))
+  .catch(err => console.error("[openai-feed] initial warm-up failed:", err.message));
+setInterval(() => {
+  refreshOpenAIProductFeedCache()
+    .then(r => console.log("[openai-feed] cache refreshed:", r.rowCount, "rows"))
+    .catch(err => console.error("[openai-feed] refresh failed:", err.message));
+}, 60 * 60 * 1000);
 
 // Daily content drop — 2 new AI-written shayari/quotes per category (20
 // categories), inserted as pre-approved submissions so they appear via the

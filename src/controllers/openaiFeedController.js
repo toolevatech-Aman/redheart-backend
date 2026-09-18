@@ -1,17 +1,19 @@
-import { buildOpenAIProductFeed } from "../utils/openaiProductFeed.js";
+import { getCachedOpenAIProductFeed } from "../utils/openaiProductFeed.js";
 
 /**
  * GET /openai-product-feed.jsonl
  * Public — the "Hosted URL" feed source for OpenAI Commerce
  * (https://developers.openai.com/commerce/specs/file-upload/products).
- * OpenAI re-fetches this URL on its own schedule, so price/stock/catalog
- * changes reach it automatically with no manual re-upload.
+ * Served from an in-memory cache (refreshed hourly — see server.js) rather
+ * than querying the full catalog on every request, since a cold build
+ * (5-8s against ~300 products) was slow enough to trip the connector's own
+ * fetch timeout.
  */
 export const openaiProductFeed = async (req, res) => {
   try {
-    const { jsonl } = await buildOpenAIProductFeed();
+    const { jsonl } = await getCachedOpenAIProductFeed();
     res.setHeader("Content-Type", "application/jsonl; charset=utf-8");
-    res.setHeader("Cache-Control", "public, max-age=3600"); // cache 1 hour
+    res.setHeader("Cache-Control", "public, max-age=3600");
     return res.send(jsonl);
   } catch (err) {
     console.error("openaiProductFeed error:", err);

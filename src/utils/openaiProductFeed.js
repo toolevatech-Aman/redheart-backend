@@ -115,3 +115,26 @@ export async function buildOpenAIProductFeed() {
   }
   return { jsonl: lines.join("\n") + "\n", rowCount: lines.length, productCount: products.length };
 }
+
+// The live route (GET /openai-product-feed.jsonl) must not run a full
+// products query on every hit — a cold build takes 5-8s against the full
+// catalog, and OpenAI's "Hosted URL" feed connector's own fetch times out
+// well before that, failing with a generic "Connection failed" on their
+// end. Keep an in-memory copy that's refreshed on a schedule (see
+// server.js) instead, so every request — including the connector's very
+// first one — is served from memory in milliseconds.
+let cached = null; // { jsonl, rowCount, productCount, generatedAt }
+
+export async function refreshOpenAIProductFeedCache() {
+  const result = await buildOpenAIProductFeed();
+  cached = { ...result, generatedAt: new Date() };
+  return cached;
+}
+
+// Serves the cache; if nothing has been built yet (e.g. hit in the first
+// moment after a fresh deploy, before the startup refresh completes),
+// falls back to building it live just this once.
+export async function getCachedOpenAIProductFeed() {
+  if (!cached) await refreshOpenAIProductFeedCache();
+  return cached;
+}
