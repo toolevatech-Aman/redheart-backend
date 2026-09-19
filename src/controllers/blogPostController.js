@@ -67,7 +67,11 @@ export async function listPublishedPosts(req, res) {
       filter.$or = [{ category: cat._id }, { additionalCategories: cat._id }];
     }
     const page  = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(50, parseInt(req.query.limit) || 12);
+    // Capped at 100/page (not the old 50) so full-listing consumers like the
+    // sitemap and llms-full.txt — which paginate through everything, not
+    // just one UI page — need fewer round-trips. Still capped, not removed,
+    // since this is a public endpoint.
+    const limit = Math.min(100, parseInt(req.query.limit) || 12);
 
     const [posts, total] = await Promise.all([
       BlogPost.find(filter)
