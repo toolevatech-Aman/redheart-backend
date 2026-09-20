@@ -1,6 +1,7 @@
 import express from "express";
 import auth from "../middlewares/authMiddleware.js";
 import { checkAccess } from "../middlewares/checkAccess.js";
+import { rateLimit } from "../middlewares/rateLimitMiddleware.js";
 import {
   createValentinePage,
   getValentinePage,
@@ -20,8 +21,11 @@ const router = express.Router();
 
 // Static routes must come before /:slug
 router.post("/",                   createValentinePage);
-router.post("/create-order",       createOrder);
-router.post("/validate-coupon",    validateCoupon);
+// Payment-adjacent — real side effects (a live Razorpay order, or a probe
+// surface for enumerating valid coupon codes), so rate-limited per IP on
+// top of whatever the edge (Vercel Firewall) already does.
+router.post("/create-order",       rateLimit({ windowMs: 60_000, max: 5,  message: "Too many order attempts. Please wait a minute and try again." }), createOrder);
+router.post("/validate-coupon",    rateLimit({ windowMs: 60_000, max: 10, message: "Too many code checks. Please wait a minute and try again." }),   validateCoupon);
 router.post("/verify-payment",     verifyPayment);
 router.post("/magic-link",         sendMagicLink);
 router.post("/verify-magic-link",  verifyMagicLink);
