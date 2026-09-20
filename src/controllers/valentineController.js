@@ -3,6 +3,7 @@ import nodemailer   from "nodemailer";
 import Razorpay     from "razorpay";
 import ValentinePage from "../models/ValentinePage.js";
 import ConfidentialKey from "../models/confidentialKeys.js";
+import { validateSurpriseCoupon, markSurpriseCouponUsed } from "../utils/couponEngine.js";
 
 // ─── Dashboard magic-link OTP store (in-memory, survives restarts poorly but fine for low volume) ──
 const dashOtpStore = new Map(); // email → { otp, expiresAt }
@@ -166,13 +167,40 @@ export const recordResponse = async (req, res) => {
 };
 
 // ─── POST /api/valentine/create-order ────────────────────────────────────────
+// ─── POST /api/valentine/validate-coupon — live feedback while typing, before
+// an order is created. Never trust this response for the actual charge;
+// createOrder/verifyPayment recompute the discount themselves server-side.
+export const validateCoupon = async (req, res) => {
+  try {
+    const { code, tierId } = req.body;
+    const tierPrice = TIER_PRICES[tierId];
+    if (tierPrice === undefined) return res.status(400).json({ error: "invalid tier" });
+
+    const { discount, error } = await validateSurpriseCoupon({ code, tierPrice });
+    if (error) return res.status(200).json({ valid: false, error });
+    return res.status(200).json({ valid: true, discount, finalTierPrice: tierPrice - discount });
+  } catch (err) {
+    console.error("validateCoupon error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+};
+
 export const createOrder = async (req, res) => {
   try {
-    const { slug, tierId, giftId, upgradeFromTierId } = req.body;
+    const { slug, tierId, giftId, upgradeFromTierId, couponCode } = req.body;
     if (!slug || !tierId) return res.status(400).json({ error: "slug and tierId required" });
 
     const tierPrice = TIER_PRICES[tierId];
     if (tierPrice === undefined) return res.status(400).json({ error: "invalid tier" });
+
+    // Coupon discount applies to the surprise-page tier price only — never
+    // to giftPrice, even though both are charged in one Razorpay order.
+    let couponDiscount = 0;
+    if (!upgradeFromTierId && couponCode) {
+      const result = await validateSurpriseCoupon({ code: couponCode, tierPrice });
+      if (result.error) return res.status(400).json({ error: result.error });
+      couponDiscount = result.discount;
+    }
 
     let amount;
     if (upgradeFromTierId) {
@@ -180,7 +208,7 @@ export const createOrder = async (req, res) => {
       amount = Math.max(1, TIER_PRICES["lifetime"] - fromPrice);
     } else {
       const giftPrice = (giftId && giftId !== "none") ? (GIFT_PRICES[giftId] || 0) : 0;
-      amount = tierPrice + giftPrice;
+      amount = Math.max(1, tierPrice - couponDiscount) + giftPrice;
     }
 
     const { keyId, keySecret } = await getRazorpayKeys();
@@ -209,12 +237,14 @@ export const createOrder = async (req, res) => {
           pendingDeliverySlot:  req.body.deliverySlot  || "",
           pendingDeliveryAddr:  pendingAddr,
           pendingDeliveryPhone: addrObj.phone || "",
+          pendingCouponCode:     (!upgradeFromTierId && couponCode) ? couponCode.toUpperCase() : "",
+          pendingCouponDiscount: couponDiscount,
         },
       },
       { upsert: true, setDefaultsOnInsert: true }
     );
 
-    return res.status(200).json({ orderId: order.id, amount, keyId });
+    return res.status(200).json({ orderId: order.id, amount, keyId, couponDiscount });
   } catch (err) {
     console.error("createOrder error:", err);
     return res.status(500).json({ error: err.message || "Server error" });
@@ -249,11 +279,17 @@ export const verifyPayment = async (req, res) => {
       return res.status(400).json({ error: "invalid payment signature" });
     }
 
-    // Compute amount server-side (cannot trust client)
+    // Compute amount server-side (cannot trust client) — coupon discount is
+    // read back from the DB (set during createOrder), not from the request
+    // body, so it can't be tampered with between order creation and verify.
+    const existing = await ValentinePage.findOne({ slug }).select("pendingCouponCode pendingCouponDiscount").lean();
+    const couponCode     = !isUpgrade ? (existing?.pendingCouponCode || "") : "";
+    const couponDiscount = !isUpgrade ? (existing?.pendingCouponDiscount || 0) : 0;
+
     const tierPrice = TIER_PRICES[tierId] ?? 99;
     const giftId    = giftDetails.giftId;
     const giftPrice = (!isUpgrade && giftId && giftId !== "none") ? (GIFT_PRICES[giftId] || 0) : 0;
-    const amountPaid = tierPrice + giftPrice;
+    const amountPaid = Math.max(1, tierPrice - couponDiscount) + giftPrice;
 
     const addrObj = giftDetails.address || {};
     const deliveryAddress = addrObj.line1
@@ -266,6 +302,8 @@ export const verifyPayment = async (req, res) => {
       razorpayOrderId:   razorpay_order_id,
       razorpayPaymentId: razorpay_payment_id,
       amountPaid,
+      couponCode,
+      couponDiscount,
     };
 
     if (!isUpgrade) {
@@ -281,6 +319,8 @@ export const verifyPayment = async (req, res) => {
       { $set: update },
       { new: true }
     );
+
+    if (couponCode) await markSurpriseCouponUsed(couponCode);
 
     return res.status(200).json({ ok: true });
   } catch (err) {
@@ -502,6 +542,8 @@ export const razorpayWebhook = async (req, res) => {
     const tierPrice = TIER_PRICES[tierId] ?? 99;
     const giftId    = page.pendingGiftId || "";
     const giftPrice = (giftId && giftId !== "none") ? (GIFT_PRICES[giftId] || 0) : 0;
+    const couponCode     = page.pendingCouponCode || "";
+    const couponDiscount = page.pendingCouponDiscount || 0;
 
     await ValentinePage.findOneAndUpdate(
       { _id: page._id },
@@ -510,15 +552,19 @@ export const razorpayWebhook = async (req, res) => {
           isPaid:            true,
           tier:              tierId,
           razorpayPaymentId: payment.id,
-          amountPaid:        tierPrice + giftPrice,
+          amountPaid:        Math.max(1, tierPrice - couponDiscount) + giftPrice,
           giftId:            giftId,
           deliveryDate:      page.pendingDeliveryDate  || "",
           deliverySlot:      page.pendingDeliverySlot  || "",
           deliveryAddress:   page.pendingDeliveryAddr  || "",
           deliveryPhone:     page.pendingDeliveryPhone || "",
+          couponCode,
+          couponDiscount,
         },
       }
     );
+
+    if (couponCode) await markSurpriseCouponUsed(couponCode);
 
     console.log(`[webhook] Activated page ${page.slug} via payment.captured`);
     return res.status(200).json({ ok: true });
@@ -543,7 +589,7 @@ export const getAllValentineOrders = async (req, res) => {
       ValentinePage.find(filter)
         .select(
           "slug occasion occasionKey partnerName yourName recipientName tier " +
-          "amountPaid razorpayPaymentId razorpayOrderId giftId deliveryDate " +
+          "amountPaid couponCode couponDiscount razorpayPaymentId razorpayOrderId giftId deliveryDate " +
           "deliverySlot deliveryAddress deliveryPhone email whatsapp responded " +
           "receiverWhatsapp sendAt unlockAt respondedAt createdAt updatedAt"
         )

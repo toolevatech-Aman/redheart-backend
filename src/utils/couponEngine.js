@@ -59,6 +59,55 @@ export async function validateAndComputeCoupon({ code, userId, subtotal, shippin
   return { discount, source: "legacy" };
 }
 
+// ─── Surprise-page coupons ─────────────────────────────────────────────────
+// Deliberately separate from validateAndComputeCoupon above: the surprise
+// checkout (ValentinePage) has no logged-in userId and isn't an Order, so
+// per-customer usage can't be tracked the same way. Discount is computed
+// against tierPrice ONLY — a surprise-page coupon must never discount an
+// attached gift/product's price, even though both are paid in one Razorpay
+// charge. Only coupons explicitly tagged "Surprise" in applicableCategories
+// are eligible here — a general sitewide product coupon (empty categories)
+// is intentionally NOT accepted, so a promo meant for flower orders can't
+// be used to discount a surprise page.
+export async function validateSurpriseCoupon({ code, tierPrice }) {
+  if (!code) return { discount: 0, error: null };
+  const upper = code.toUpperCase();
+
+  const coupon = await Coupon.findOne({ code: upper });
+  if (!coupon) return { discount: 0, error: "Invalid coupon code" };
+  if (!coupon.applicableCategories?.includes("Surprise")) {
+    return { discount: 0, error: "This code isn't valid for surprise pages" };
+  }
+
+  const now = new Date();
+  if (coupon.status !== "active") return { discount: 0, error: "Coupon is not active" };
+  if (coupon.validFrom && now < coupon.validFrom) return { discount: 0, error: "Coupon not yet valid" };
+  if (coupon.validUntil && now > coupon.validUntil) return { discount: 0, error: "Coupon has expired" };
+  if (tierPrice < Number(coupon.minOrderValue || 0)) {
+    return { discount: 0, error: `Minimum page value ₹${coupon.minOrderValue} required` };
+  }
+  if (coupon.usageLimitGlobal != null && coupon.timesUsed >= coupon.usageLimitGlobal) {
+    return { discount: 0, error: "Coupon usage limit reached" };
+  }
+
+  let discount = 0;
+  if (coupon.discountType === "percentage") {
+    discount = (tierPrice * Number(coupon.discountValue)) / 100;
+    if (coupon.maxDiscount) discount = Math.min(discount, Number(coupon.maxDiscount));
+  } else if (coupon.discountType === "flat") {
+    discount = Number(coupon.discountValue);
+  }
+  // free_shipping doesn't apply — a digital surprise page has no shipping charge.
+  discount = Math.min(discount, tierPrice); // never push the tier price below ₹0
+
+  return { discount, error: null };
+}
+
+export async function markSurpriseCouponUsed(code) {
+  if (!code) return;
+  await Coupon.updateOne({ code: code.toUpperCase() }, { $inc: { timesUsed: 1 } });
+}
+
 // Called once a coupon's order is actually confirmed (COD immediately, or
 // PREPAID after payment verification) — never on order creation alone.
 export async function markCouponUsed({ code, source, userId }) {

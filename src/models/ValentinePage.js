@@ -32,6 +32,13 @@ const valentinePageSchema = new mongoose.Schema(
     razorpayPaymentId:  { type: String, default: "" },
     amountPaid:         { type: Number, default: 0 },
 
+    // Referral/coupon — discount is computed against the surprise-page tier
+    // price only (never against selectedGift's price), see couponEngine.js
+    // validateSurpriseCoupon(). couponDiscount is the ₹ amount actually
+    // deducted, kept alongside the code for the admin order view.
+    couponCode:     { type: String, default: "" },
+    couponDiscount: { type: Number, default: 0 },
+
     // Gift + delivery (set at payment time)
     giftId:       { type: String, default: "" },
     deliveryDate: { type: String, default: "" },
@@ -44,6 +51,8 @@ const valentinePageSchema = new mongoose.Schema(
     pendingDeliverySlot:  { type: String, default: "" },
     pendingDeliveryAddr:  { type: String, default: "" },
     pendingDeliveryPhone: { type: String, default: "" },
+    pendingCouponCode:     { type: String, default: "" },
+    pendingCouponDiscount: { type: Number, default: 0 },
 
     // Analytics
     viewCount:    { type: Number, default: 0 },

@@ -8,6 +8,7 @@ import {
   recordResponse,
   createOrder,
   verifyPayment,
+  validateCoupon,
   sendMagicLink,
   verifyMagicLink,
   getMyPages,
@@ -20,6 +21,7 @@ const router = express.Router();
 // Static routes must come before /:slug
 router.post("/",                   createValentinePage);
 router.post("/create-order",       createOrder);
+router.post("/validate-coupon",    validateCoupon);
 router.post("/verify-payment",     verifyPayment);
 router.post("/magic-link",         sendMagicLink);
 router.post("/verify-magic-link",  verifyMagicLink);
