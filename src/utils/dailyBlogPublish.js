@@ -9,6 +9,7 @@
 import BlogPost from "../models/BlogPost.js";
 import { BlogCategory } from "../models/BlogCategory.js";
 import { invalidateCache } from "../middlewares/cacheMiddleware.js";
+import { revalidateBlogListing } from "./revalidateFrontend.js";
 
 // Exported so the admin queue-status endpoint (getBlogQueueStatus) shares
 // the exact same vertical/author/rate config instead of a second copy that
@@ -64,5 +65,7 @@ export async function runDailyBlogPublish() {
   }
 
   invalidateCache("/api/blogs");
-  return { publishedTotal: results.reduce((s, r) => s + r.published, 0), results };
+  const publishedTotal = results.reduce((s, r) => s + r.published, 0);
+  if (publishedTotal > 0) revalidateBlogListing();
+  return { publishedTotal, results };
 }

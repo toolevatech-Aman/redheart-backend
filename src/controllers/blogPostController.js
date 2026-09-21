@@ -2,6 +2,7 @@ import BlogPost from "../models/BlogPost.js";
 import { BlogCategory } from "../models/BlogCategory.js";
 import { invalidateCache } from "../middlewares/cacheMiddleware.js";
 import { runDailyBlogPublish, VERTICALS, PER_VERTICAL_PER_DAY } from "../utils/dailyBlogPublish.js";
+import { revalidateBlogListing } from "../utils/revalidateFrontend.js";
 
 // ── Admin: list all posts (any status), basic filtering ────────────────────
 export async function listBlogPosts(req, res) {
@@ -97,6 +98,7 @@ export async function createBlogPost(req, res) {
     if (body.status === "published" && !body.publishedAt) body.publishedAt = new Date();
     const post = await BlogPost.create(body);
     invalidateCache("/api/blogs");
+    if (post.status === "published") revalidateBlogListing();
     return res.status(201).json(post);
   } catch (err) {
     if (err.code === 11000) {
@@ -117,6 +119,7 @@ export async function updateBlogPost(req, res) {
     }
     const post = await BlogPost.findByIdAndUpdate(req.params.id, { $set: body }, { new: true, runValidators: true });
     invalidateCache("/api/blogs");
+    if (body.status === "published" && existing.status !== "published") revalidateBlogListing();
     return res.json(post);
   } catch (err) {
     if (err.code === 11000) {
