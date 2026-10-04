@@ -27,6 +27,7 @@ import subscriberRoutes from './routes/subscriberRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import vendorRoutes from './routes/vendorRoutes.js';
 import couponRoutes from './routes/couponRoutes.js';
+import reminderRoutes from './routes/reminderRoutes.js';
 import blogRoutes from './routes/blogRoutes.js';
 import { razorpayWebhook, runAbandonmentEmails } from './controllers/valentineController.js';
 import { razorpayOrderWebhook } from './controllers/orderController.js';
@@ -38,6 +39,7 @@ import { runDailyIndexNowSubmit } from './utils/dailyIndexNowSubmit.js';
 import { runDailyContentDrop } from './utils/dailyContentDrop.js';
 import { runDailyBlogPublish } from './utils/dailyBlogPublish.js';
 import { runVendorReconciliation } from './utils/reconcileVendorStats.js';
+import { runDailyReminderCheck } from './utils/dailyReminderCheck.js';
 const app = express();
 
 // Razorpay webhooks — must receive raw body BEFORE express.json parses it
@@ -117,6 +119,7 @@ app.use("/api/subscribers",     subscriberRoutes);
 app.use("/api/analytics",       analyticsRoutes);
 app.use("/api/vendors",         vendorRoutes);
 app.use("/api/coupons",         couponRoutes);
+app.use("/api/reminders",       reminderRoutes);
 
 // ── Sitemaps (public, no /api prefix) ────────────────────────────────────────
 app.get("/sitemap_cities.xml", citiesSitemap);
@@ -194,3 +197,12 @@ setTimeout(() => {
     runVendorReconciliation().then(r => console.log("[vendor-reconcile]", r)).catch(err => console.error("[vendor-reconcile]", err.message));
   }, 24 * 60 * 60 * 1000);
 }, 15 * 60 * 1000);
+
+// Daily "My Reminders" check — emails a customer a few days before a saved
+// date (birthday, anniversary, etc.) comes up. See utils/dailyReminderCheck.js.
+setTimeout(() => {
+  runDailyReminderCheck().then(r => console.log("[reminder-check]", r)).catch(err => console.error("[reminder-check]", err.message));
+  setInterval(() => {
+    runDailyReminderCheck().then(r => console.log("[reminder-check]", r)).catch(err => console.error("[reminder-check]", err.message));
+  }, 24 * 60 * 60 * 1000);
+}, 25 * 60 * 1000);
