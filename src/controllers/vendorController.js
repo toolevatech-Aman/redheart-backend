@@ -403,7 +403,7 @@ async function applyPinCodeStat(pinCode, { cost, deliveryCost }, isNewDataPoint 
     { upsert: true, new: true }
   );
   if (stat.orderCount > 0) stat.avgCost = Math.round(stat.totalCost / stat.orderCount);
-  if (stat.deliveryOrderCount > 0) {
+  if (stat.deliveryOrderCount > 0 && !stat.isManualOverride) {
     stat.avgDeliveryCost = Math.round(stat.totalDeliveryCost / stat.deliveryOrderCount);
     // Require a few data points before trusting the average enough to surcharge
     // real customers — one unusually expensive delivery shouldn't set the price.

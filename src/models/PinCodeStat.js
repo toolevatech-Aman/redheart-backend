@@ -14,6 +14,12 @@ const pinCodeStatSchema = new mongoose.Schema(
     deliveryOrderCount: { type: Number, default: 0 },
     avgDeliveryCost: { type: Number, default: 0 },
     extraDeliveryFee: { type: Number, default: 0 }, // max(0, avgDeliveryCost - standard shipping charge)
+
+    // Set directly by an admin (e.g. a known remote/hard-to-serve pin code)
+    // rather than derived from vendor delivery history — applyPinCodeStat
+    // skips recalculating extraDeliveryFee for these so a real delivered
+    // order to this pin code doesn't silently average the override away.
+    isManualOverride: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
