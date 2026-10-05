@@ -70,14 +70,21 @@ export const getAllUsersAdmin = async (req, res) => {
     const pids = [...pidSet];
     const objectIds = pids.filter(id => /^[0-9a-fA-F]{24}$/.test(id));
 
+    // A third $or branch here used to match against "variants._id" — but
+    // Product's actual schema calls that array `variations`, not `variants`,
+    // so that clause could never match anything. Being both unindexed and
+    // referencing a nonexistent field meant Mongo had to full-scan the
+    // entire product catalog on every single call to this endpoint just to
+    // rule it out — the same bug (and fix) as getAllOrders in
+    // orderController.js, and a contributor to a production CPU-exhaustion
+    // incident.
     const Product = (await import("../models/Product.js")).default;
     const products = await Product.find({
       $or: [
         { _id: { $in: objectIds } },
         { product_id: { $in: pids } },
-        { "variants._id": { $in: objectIds } },
       ],
-    }).select("product_id slug sku categorization.category_name variants._id").lean();
+    }).select("product_id slug sku categorization.category_name").lean();
 
     const productUrlMap = {};
     for (const p of products) {
@@ -87,7 +94,6 @@ export const getAllUsersAdmin = async (req, res) => {
       const url = `https://www.redheart.in/p/${catSlug}/${p.slug}${skuPart}`;
       productUrlMap[String(p._id)] = url;
       if (p.product_id) productUrlMap[p.product_id] = url;
-      (p.variants || []).forEach(v => { productUrlMap[String(v._id)] = url; });
     }
 
     const result = users.map(u => {
