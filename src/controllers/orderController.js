@@ -1,6 +1,8 @@
 import Order from '../models/order.js';
 import User from '../models/User.js';
+import Product from '../models/Product.js';
 import { getRazorpayInstance } from '../services/razorpay.js';
+import ConfidentialKey from '../models/confidentialKeys.js';
 import { sendOrderAlertEmail } from '../utils/orderAlertMail.js';
 import { recordVendorOutcome, recordItemVendorOutcomes } from './vendorController.js';
 import { validateAndComputeCoupon, markCouponUsed } from '../utils/couponEngine.js';
@@ -36,9 +38,23 @@ export const createOrder = async (req, res) => {
 
     let discount = 0;
     if (orderData.coupanApplied) {
+      // Look up each cart item's category so a coupon scoped via
+      // applicableCategories (e.g. a Surprise-only code) can't be used to
+      // discount an unrelated regular product order — see couponEngine.js.
+      // cartItems.productId may be product._id or product_id (see the same
+      // ambiguity handled in getAllOrders below), so match on both.
+      const cartPids = [...new Set((orderData.cartItems || []).map((ci) => ci.productId).filter(Boolean).map(String))];
+      const cartObjectIds = cartPids.filter((id) => /^[0-9a-fA-F]{24}$/.test(id));
+      const cartProducts = cartPids.length
+        ? await Product.find({
+            $or: [{ _id: { $in: cartObjectIds } }, { product_id: { $in: cartPids } }],
+          }).select("categorization.category_name").lean()
+        : [];
+      const cartCategories = [...new Set(cartProducts.map((p) => p.categorization?.category_name).filter(Boolean))];
+
       const result = await validateAndComputeCoupon({
         code: orderData.coupanApplied, userId, subtotal,
-        shippingCharges: shippingTotal,
+        shippingCharges: shippingTotal, cartCategories,
       });
       discount = result.discount;
       orderData.coupanDiscount = discount;
@@ -54,7 +70,11 @@ export const createOrder = async (req, res) => {
       const razorpay = await getRazorpayInstance();
 
       razorpayOrder = await razorpay.orders.create({
-        amount: Number(orderData.totalPrice) * 100, 
+        // Razorpay requires an integer paise amount — totalPrice can carry
+        // fractional rupees after a percentage-based coupon discount, so
+        // round rather than truncate via a raw *100 (was causing "The
+        // amount must be an integer" 500s on checkout).
+        amount: Math.round(Number(orderData.totalPrice) * 100),
         currency: "INR",
         receipt: `rcpt_${Date.now()}`
       });
@@ -74,10 +94,22 @@ export const createOrder = async (req, res) => {
       await markCouponUsed({ code: orderData.coupanApplied, source: orderData.coupanSource, userId });
     }
 
+    // Frontend needs the live key_id to open the Razorpay checkout widget —
+    // it was previously hardcoded there and went stale the moment the key
+    // was rotated (order created fine under the new key, but the widget
+    // opened with the old one → instant "Payment Failed"). Always hand back
+    // whatever key is currently active instead.
+    let key_id = null;
+    if (orderData.paymentMode === "PREPAID") {
+      const keyDoc = await ConfidentialKey.findOne({ key: "RAZORPAY_KEY_ID" });
+      key_id = keyDoc?.value || null;
+    }
+
     res.status(201).json({
       success: true,
       message: 'Order created successfully',
-      data: order
+      data: order,
+      key_id,
     });
   } catch (error) {
     console.error(error);
@@ -231,11 +263,82 @@ const PRODUCT_CATEGORY_SLUG = { Flowers: "flowers", Cakes: "cakes", Plants: "pla
 
 export const getAllOrders = async (req, res) => {
   try {
-    const orders = await Order.find({
-      paymentStatus: { $in: ["COD", "PAID"] } // filter
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+    const { search = "", status, paymentMode } = req.query;
+
+    const baseFilter = { paymentStatus: { $in: ["COD", "PAID"] } };
+    const filter = { ...baseFilter };
+    if (status) filter.orderStatus = status;
+    if (paymentMode) filter.paymentMode = new RegExp(`^${paymentMode}$`, "i");
+
+    if (search.trim()) {
+      const q = search.trim();
+      const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      // Matches either directly on the order (id, shipping details, item
+      // names) or via the customer who placed it (name/email/phone) — the
+      // customer match needs a separate lookup since Order only stores a
+      // plain userId string, not an embedded/ref'd User document.
+      const matchingUsers = await User.find({
+        $or: [{ name: rx }, { email: rx }, { phone: rx }],
+      }).select("userId").lean();
+      const matchingUserIds = matchingUsers.map((u) => u.userId);
+
+      filter.$or = [
+        { orderId: rx },
+        { "shippingAddress.firstName": rx },
+        { "shippingAddress.lastName": rx },
+        { "shippingAddress.phone": rx },
+        { "shippingAddress.city": rx },
+        { "cartItems.name": rx },
+        ...(matchingUserIds.length ? [{ userId: { $in: matchingUserIds } }] : []),
+      ];
+    }
+
+    // Stats reflect the full COD/PAID order set regardless of the current
+    // search/status/paymentMode filter or page — the admin's stat cards are
+    // meant to read as sitewide totals, not "totals for what's on screen".
+    // A single $facet aggregation keeps this to one query instead of five.
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+    const [statsAgg, total, orders] = await Promise.all([
+      Order.aggregate([
+        { $match: baseFilter },
+        {
+          $facet: {
+            total: [{ $count: "count" }],
+            revenue: [
+              { $match: { orderStatus: { $ne: "Cancelled" } } },
+              { $group: { _id: null, sum: { $sum: "$totalPrice" } } },
+            ],
+            pending: [{ $match: { orderStatus: "Pending" } }, { $count: "count" }],
+            deliverToday: [
+              { $match: { deliveryDate: { $gte: today, $lt: tomorrow }, orderStatus: { $nin: ["Delivered", "Cancelled"] } } },
+              { $count: "count" },
+            ],
+            overdue: [
+              { $match: { deliveryDate: { $lt: today }, orderStatus: { $nin: ["Delivered", "Cancelled"] } } },
+              { $count: "count" },
+            ],
+          },
+        },
+      ]),
+      Order.countDocuments(filter),
+      Order.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+    ]);
+
+    const s = statsAgg[0] || {};
+    const stats = {
+      total: s.total?.[0]?.count || 0,
+      revenue: s.revenue?.[0]?.sum || 0,
+      pending: s.pending?.[0]?.count || 0,
+      deliverToday: s.deliverToday?.[0]?.count || 0,
+      overdue: s.overdue?.[0]?.count || 0,
+    };
 
     // ── Join customer details (User.userId is the same UUID as Order.userId) ──
     const userIds = [...new Set(orders.map((o) => o.userId).filter(Boolean))];
@@ -244,7 +347,15 @@ export const getAllOrders = async (req, res) => {
       .lean();
     const userMap = Object.fromEntries(users.map((u) => [u.userId, u]));
 
-    // ── Join product URLs (cartItems.productId may be product._id, product_id, or a variant._id) ──
+    // ── Join product URLs (cartItems.productId may be product._id or product_id) ──
+    // A third $or branch here used to match against "variants._id" — but
+    // Product's actual schema calls that array `variations`, not `variants`,
+    // so that clause could never match anything. Being both unindexed and
+    // referencing a nonexistent field meant Mongo had to full-scan the
+    // entire product catalog on every single call to this endpoint just to
+    // rule it out — this admin list is polled frequently, and that scan was
+    // the real driver behind this endpoint's chronic multi-second response
+    // times (and a contributor to a production CPU-exhaustion incident).
     const pidSet = new Set();
     orders.forEach((o) =>
       (o.cartItems || []).forEach((ci) => ci.productId && pidSet.add(String(ci.productId)))
@@ -252,15 +363,13 @@ export const getAllOrders = async (req, res) => {
     const pids = [...pidSet];
     const objectIds = pids.filter((id) => /^[0-9a-fA-F]{24}$/.test(id));
 
-    const Product = (await import("../models/Product.js")).default;
     const products = await Product.find({
       $or: [
         { _id: { $in: objectIds } },
         { product_id: { $in: pids } },
-        { "variants._id": { $in: objectIds } },
       ],
     })
-      .select("product_id slug sku categorization.category_name variants._id")
+      .select("product_id slug sku categorization.category_name")
       .lean();
 
     const productUrlMap = {};
@@ -271,7 +380,6 @@ export const getAllOrders = async (req, res) => {
       const url = `https://www.redheart.in/p/${catSlug}/${p.slug}${skuPart}`;
       productUrlMap[String(p._id)] = url;
       if (p.product_id) productUrlMap[p.product_id] = url;
-      (p.variants || []).forEach((v) => { productUrlMap[String(v._id)] = url; });
     }
 
     const data = orders.map((o) => ({
@@ -283,7 +391,12 @@ export const getAllOrders = async (req, res) => {
       })),
     }));
 
-    res.status(200).json({ success: true, data });
+    res.status(200).json({
+      success: true,
+      data,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      stats,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Server Error', error: error.message });
