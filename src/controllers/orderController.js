@@ -7,6 +7,7 @@ import { sendOrderAlertEmail } from '../utils/orderAlertMail.js';
 import { recordVendorOutcome, recordItemVendorOutcomes } from './vendorController.js';
 import { validateAndComputeCoupon, markCouponUsed } from '../utils/couponEngine.js';
 import { sendGA4Purchase } from '../utils/ga4.js';
+import { computePincodeSurcharge } from './pincodeSurchargeController.js';
 
 import { createHmac } from "crypto";
 
@@ -62,7 +63,14 @@ export const createOrder = async (req, res) => {
       if (!result.source) orderData.coupanApplied = null; // invalid/expired — don't record a code that didn't actually apply
     }
 
-    orderData.totalPrice = subtotal + shippingTotal - discount + tipAmount;
+    // Remote-area surcharge — computed here from the admin-managed rule for
+    // the delivery pin code, never taken from the client. Coupons apply to
+    // the product subtotal only, not to this charge.
+    const surcharge = await computePincodeSurcharge(orderData.shippingAddress?.postalCode, subtotal);
+    orderData.pincodeSurcharge = surcharge.amount || 0;
+    orderData.pincodeSurchargeNote = surcharge.amount ? surcharge.note : "";
+
+    orderData.totalPrice = subtotal + shippingTotal - discount + tipAmount + orderData.pincodeSurcharge;
 
     let razorpayOrder = null; // declare variable for response
 

@@ -68,6 +68,8 @@ const orderSchema = new mongoose.Schema({
   totalProductPrice: Number,
   totalPrice: Number,
   tipAmount: { type: Number, default: 0 }, // voluntary tip for the delivery partner
+  pincodeSurcharge: { type: Number, default: 0 }, // remote-area surcharge, set server-side from PincodeSurcharge
+  pincodeSurchargeNote: { type: String, default: "" },
   orderNote: { type: String, default: "" },
   orderStatus: { type: String, default: 'Pending' }, // Pending, Processing, Shipped, Delivered, Cancelled
 
