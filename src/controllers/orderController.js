@@ -8,6 +8,7 @@ import { recordVendorOutcome, recordItemVendorOutcomes } from './vendorControlle
 import { validateAndComputeCoupon, markCouponUsed } from '../utils/couponEngine.js';
 import { sendGA4Purchase } from '../utils/ga4.js';
 import { computePincodeSurcharge } from './pincodeSurchargeController.js';
+import { computeDeliverySurcharge } from './deliverySurchargeController.js';
 
 import { createHmac } from "crypto";
 
@@ -70,7 +71,13 @@ export const createOrder = async (req, res) => {
     orderData.pincodeSurcharge = surcharge.amount || 0;
     orderData.pincodeSurchargeNote = surcharge.amount ? surcharge.note : "";
 
-    orderData.totalPrice = subtotal + shippingTotal - discount + tipAmount + orderData.pincodeSurcharge;
+    // Extra delivery charge for pin codes that cost more to deliver to —
+    // also set here, from the admin's rules, never taken from the client.
+    const deliveryExtra = await computeDeliverySurcharge(orderData.shippingAddress?.postalCode);
+    orderData.deliverySurcharge = deliveryExtra.amount || 0;
+    orderData.deliverySurchargeNote = deliveryExtra.amount ? deliveryExtra.note : "";
+
+    orderData.totalPrice = subtotal + shippingTotal - discount + tipAmount + orderData.pincodeSurcharge + orderData.deliverySurcharge;
 
     let razorpayOrder = null; // declare variable for response
 
