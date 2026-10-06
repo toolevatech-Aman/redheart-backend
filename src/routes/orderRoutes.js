@@ -10,7 +10,7 @@ import {
 import auth from '../middlewares/authMiddleware.js';
 import { checkAccess } from '../middlewares/checkAccess.js';
 import {
-  getSurchargeForPin, listSurcharges, upsertSurcharge, deleteSurcharge,
+  getSurchargeForPin, listSurcharges, upsertSurcharge, bulkUpsertSurcharges, deleteSurcharge,
 } from '../controllers/pincodeSurchargeController.js';
 const isOverallAdmin = checkAccess("overall");
 
@@ -42,6 +42,7 @@ router.get('/', auth, isOverallAdmin, getAllOrders);
 
 // Pin-code surcharges (admin-managed)
 router.get('/admin/pincode-surcharges', auth, isOverallAdmin, listSurcharges);
+router.post('/admin/pincode-surcharges', auth, isOverallAdmin, bulkUpsertSurcharges);
 router.put('/admin/pincode-surcharges/:pinCode', auth, isOverallAdmin, upsertSurcharge);
 router.delete('/admin/pincode-surcharges/:pinCode', auth, isOverallAdmin, deleteSurcharge);
 
