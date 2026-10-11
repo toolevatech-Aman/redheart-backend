@@ -28,6 +28,7 @@ import analyticsRoutes from './routes/analyticsRoutes.js';
 import vendorRoutes from './routes/vendorRoutes.js';
 import couponRoutes from './routes/couponRoutes.js';
 import reminderRoutes from './routes/reminderRoutes.js';
+import themeRoutes from './routes/themeRoutes.js';
 import blogRoutes from './routes/blogRoutes.js';
 import { razorpayWebhook, runAbandonmentEmails } from './controllers/valentineController.js';
 import { razorpayOrderWebhook } from './controllers/orderController.js';
@@ -120,6 +121,7 @@ app.use("/api/analytics",       analyticsRoutes);
 app.use("/api/vendors",         vendorRoutes);
 app.use("/api/coupons",         couponRoutes);
 app.use("/api/reminders",       reminderRoutes);
+app.use("/api/themes",          themeRoutes);
 
 // ── Sitemaps (public, no /api prefix) ────────────────────────────────────────
 app.get("/sitemap_cities.xml", citiesSitemap);
