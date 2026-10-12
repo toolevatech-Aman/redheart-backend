@@ -43,6 +43,7 @@ const pick = (b) => ({
     bg: String(b.announcement?.bg || "#111111").toLowerCase(),
     color: String(b.announcement?.color || "#ffffff").toLowerCase(),
   },
+  style: String(b.style || "").toLowerCase(),
   startsAt: b.startsAt || null,
   endsAt: b.endsAt || null,
   isEnabled: !!b.isEnabled,

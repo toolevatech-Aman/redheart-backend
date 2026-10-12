@@ -12,6 +12,9 @@ const themeSchema = new mongoose.Schema(
       bg:    { type: String, default: "#111111" },
       color: { type: String, default: "#ffffff" },
     },
+    // Festive effect the storefront draws on top of the palette ("" = none).
+    // The artwork lives in the storefront; the name is whitelisted in utils/themeCss.js.
+    style:     { type: String, default: "" },
     startsAt:  { type: Date, default: null },                // blank = from now
     endsAt:    { type: Date, default: null },                // blank = until switched off
     // Off by default so saving a draft can never put it on the live site.

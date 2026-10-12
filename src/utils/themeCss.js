@@ -37,6 +37,10 @@ export function cleanAnnouncement(text) {
 }
 const cssString = (s) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 
+// Festive effects the storefront knows how to draw. Keep in sync with
+// storefront public/theme-fx/<name>.css and components/ThemeFx.jsx.
+export const THEME_STYLES = ["durga", "holi"];
+
 export function validateTheme(input) {
   const errors = [];
   const name = String(input.name || "").trim();
@@ -48,6 +52,7 @@ export function validateTheme(input) {
     if (!isHex(ann.bg || "")) errors.push("Announcement bar colour must be a hex colour");
     if (!isHex(ann.color || "")) errors.push("Announcement text colour must be a hex colour");
   }
+  if (input.style && !THEME_STYLES.includes(input.style)) errors.push("Unknown festive effect");
   const startsAt = input.startsAt ? new Date(input.startsAt) : null;
   const endsAt = input.endsAt ? new Date(input.endsAt) : null;
   if (startsAt && isNaN(startsAt)) errors.push("Start date is invalid");
@@ -65,6 +70,7 @@ export function buildThemeCss(theme) {
   for (const step of [50, 100, 200, 300, 400, 500, 600]) vars.push(`--brand-${step}:${s[step]}`);
   for (const step of [700, 800, 900]) vars.push(`--rose-${step}:${s[step]}`);
   for (const step of [50, 100, 200, 300, 400, 500, 600, 700, 800, 900]) vars.push(`--brandred-${step}:${s[step]}`);
+  if (THEME_STYLES.includes(theme.style)) vars.push(`--theme-fx:${theme.style}`);
   let css = `html:root{${vars.join(";")}}`;
   const text = cleanAnnouncement(theme.announcement?.text);
   if (text && isHex(theme.announcement?.bg || "") && isHex(theme.announcement?.color || "")) {
