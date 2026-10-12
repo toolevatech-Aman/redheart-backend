@@ -39,7 +39,47 @@ const cssString = (s) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 
 // Festive effects the storefront knows how to draw. Keep in sync with
 // storefront public/theme-fx/<name>.css and components/ThemeFx.jsx.
-export const THEME_STYLES = ["durga", "holi", "diwali", "christmas"];
+export const THEME_STYLES = [
+  "durga",
+  "holi",
+  "diwali",
+  "christmas",
+  "baisakhi",
+  "bhai-dooj",
+  "buddha-purnima",
+  "chhath-puja",
+  "chocolate-day",
+  "earth-day",
+  "easter",
+  "eid",
+  "eid-al-adha",
+  "engineers-day",
+  "environment-day",
+  "fathers-day",
+  "friendship-day",
+  "ganesh-chaturthi",
+  "good-friday",
+  "guru-purnima",
+  "hug-day",
+  "independence-day",
+  "janmashtami",
+  "karwa-chauth",
+  "kiss-day",
+  "lohri",
+  "mothers-day",
+  "new-year",
+  "onam",
+  "promise-day",
+  "propose-day",
+  "raksha-bandhan",
+  "ram-navami",
+  "republic-day",
+  "rose-day",
+  "teachers-day",
+  "teddy-day",
+  "valentines-day",
+  "vasant-panchami",
+];
 
 export function validateTheme(input) {
   const errors = [];
