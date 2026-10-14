@@ -73,6 +73,18 @@ const orderSchema = new mongoose.Schema({
   deliverySurcharge: { type: Number, default: 0 }, // extra delivery charge for the pin code, set server-side from DeliverySurcharge
   deliverySurchargeNote: { type: String, default: "" },
   orderNote: { type: String, default: "" },
+
+  // ── Orders created by staff on a customer's behalf (admin "Create order") ──
+  source: { type: String, enum: ["web", "manual"], default: "web" },
+  orderChannel: { type: String, default: "" },       // where it came from: Phone call, WhatsApp, Instagram...
+  createdByAdminId: { type: String, default: "" },   // userId of the admin who created it
+  adminDiscount: { type: Number, default: 0 },       // discount given by staff (coupon discount is separate)
+  discountReason: { type: String, default: "" },
+  adminNote: { type: String, default: "" },          // internal note, never shown to the customer
+  paymentChannel: { type: String, default: "" },     // for "already paid": UPI, Bank transfer, Cash...
+  paymentReference: { type: String, default: "" },
+  manualToken: { type: String, index: true, sparse: true }, // stops a double-click creating two orders
+
   orderStatus: { type: String, default: 'Pending' }, // Pending, Processing, Shipped, Delivered, Cancelled
 
   // ── Vendor assignment (manual, via ops) ──────────────────────────────────

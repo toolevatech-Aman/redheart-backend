@@ -16,6 +16,9 @@ import {
   getDeliverySurchargeForPin, listDeliverySurcharges, bulkUpsertDeliverySurcharges,
   upsertDeliverySurcharge, deleteDeliverySurcharge, deliveryCostInsights,
 } from '../controllers/deliverySurchargeController.js';
+import {
+  searchCustomers, getCustomer, createCustomer, searchProducts, previewManualOrder, createManualOrder,
+} from '../controllers/manualOrderController.js';
 const isOverallAdmin = checkAccess("overall");
 
 const router = express.Router();
@@ -59,6 +62,14 @@ router.put('/admin/delivery-surcharges/:pinCode', auth, isOverallAdmin, upsertDe
 router.delete('/admin/delivery-surcharges/:pinCode', auth, isOverallAdmin, deleteDeliverySurcharge);
 
 // Update order status
+// Admin: create an order on a customer's behalf
+router.get('/admin/customers', auth, isOverallAdmin, searchCustomers);
+router.get('/admin/customers/:userId', auth, isOverallAdmin, getCustomer);
+router.post('/admin/customers', auth, isOverallAdmin, createCustomer);
+router.get('/admin/products', auth, isOverallAdmin, searchProducts);
+router.post('/admin/manual/preview', auth, isOverallAdmin, previewManualOrder);
+router.post('/admin/manual', auth, isOverallAdmin, createManualOrder);
+
 router.patch('/admin/:orderId/status', auth, isOverallAdmin, updateOrderStatus);
 
 export default router;
