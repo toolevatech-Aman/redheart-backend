@@ -289,7 +289,9 @@ export const getAllOrders = async (req, res) => {
     const { search = "", status, paymentMode } = req.query;
 
     const baseFilter = { paymentStatus: { $in: ["COD", "PAID"] } };
-    const filter = { ...baseFilter };
+    // The list also shows staff-created orders that are still waiting for payment (so staff can
+    // share/check their payment link); abandoned website checkouts stay hidden. Stats use baseFilter only.
+    const filter = { $and: [{ $or: [baseFilter, { source: "manual", paymentStatus: "PENDING" }] }] };
     if (status) filter.orderStatus = status;
     if (paymentMode) filter.paymentMode = new RegExp(`^${paymentMode}$`, "i");
 
@@ -305,7 +307,7 @@ export const getAllOrders = async (req, res) => {
       }).select("userId").lean();
       const matchingUserIds = matchingUsers.map((u) => u.userId);
 
-      filter.$or = [
+      filter.$and.push({ $or: [
         { orderId: rx },
         { "shippingAddress.firstName": rx },
         { "shippingAddress.lastName": rx },
@@ -313,7 +315,7 @@ export const getAllOrders = async (req, res) => {
         { "shippingAddress.city": rx },
         { "cartItems.name": rx },
         ...(matchingUserIds.length ? [{ userId: { $in: matchingUserIds } }] : []),
-      ];
+      ] });
     }
 
     // Stats reflect the full COD/PAID order set regardless of the current
