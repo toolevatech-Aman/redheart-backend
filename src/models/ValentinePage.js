@@ -23,6 +23,10 @@ const valentinePageSchema = new mongoose.Schema(
     sendAt:        { type: String, default: "" },          // preferred date+time (datetime-local string) to WhatsApp the link
     unlockAt:      { type: String, default: "" },          // datetime-local string — page stays locked (no reveal) until this moment
 
+    // Interactive birthday page content: { v, cake, reasons[], captions[], letter }.
+    // Sanitised and size-limited by the storefront API route (lib/birthdayScene.js) before it gets here.
+    scene:         { type: mongoose.Schema.Types.Mixed, default: null },
+
     // Tier: free | popular | lifetime
     tier: { type: String, enum: ["free", "popular", "lifetime"], default: "free" },
 
