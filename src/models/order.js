@@ -85,6 +85,13 @@ const orderSchema = new mongoose.Schema({
   paymentReference: { type: String, default: "" },
   manualToken: { type: String, index: true, sparse: true }, // stops a double-click creating two orders
 
+  // ── Razorpay payment link (staff-created orders the customer pays online) ──
+  paymentLinkId: { type: String, default: "", index: true },
+  paymentLinkUrl: { type: String, default: "" },
+  paymentLinkStatus: { type: String, default: "" },   // created | paid | expired | cancelled
+  paymentLinkExpiresAt: { type: Date, default: null },
+  paidAt: { type: Date, default: null },
+
   orderStatus: { type: String, default: 'Pending' }, // Pending, Processing, Shipped, Delivered, Cancelled
 
   // ── Vendor assignment (manual, via ops) ──────────────────────────────────

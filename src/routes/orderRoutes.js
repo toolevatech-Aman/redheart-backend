@@ -19,6 +19,7 @@ import {
 import {
   searchCustomers, getCustomer, createCustomer, searchProducts, previewManualOrder, createManualOrder,
 } from '../controllers/manualOrderController.js';
+import { createLinkForOrder, refreshPayment, markPaidManually } from '../controllers/paymentLinkController.js';
 const isOverallAdmin = checkAccess("overall");
 
 const router = express.Router();
@@ -69,6 +70,9 @@ router.post('/admin/customers', auth, isOverallAdmin, createCustomer);
 router.get('/admin/products', auth, isOverallAdmin, searchProducts);
 router.post('/admin/manual/preview', auth, isOverallAdmin, previewManualOrder);
 router.post('/admin/manual', auth, isOverallAdmin, createManualOrder);
+router.post('/admin/:orderId/payment-link', auth, isOverallAdmin, createLinkForOrder);
+router.post('/admin/:orderId/refresh-payment', auth, isOverallAdmin, refreshPayment);
+router.post('/admin/:orderId/mark-paid', auth, isOverallAdmin, markPaidManually);
 
 router.patch('/admin/:orderId/status', auth, isOverallAdmin, updateOrderStatus);
 

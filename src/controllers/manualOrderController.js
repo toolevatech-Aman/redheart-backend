@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import Product from "../models/Product.js";
 import { validateAndComputeCoupon, markCouponUsed } from "../utils/couponEngine.js";
 import { computePincodeSurcharge } from "./pincodeSurchargeController.js";
+import { issuePaymentLink } from "./paymentLinkController.js";
 import { computeDeliverySurcharge } from "./deliverySurchargeController.js";
 import {
   ManualOrderError, MAX_LINES, ORDER_CHANNELS, cleanAddress, parseDeliveryDate, resolveLine,
@@ -165,14 +166,15 @@ export const createManualOrder = async (req, res) => {
 
     const adminId = req.user?.userId || "";
     const cod = pay.mode === "COD";
+    const link = pay.mode === "PAYMENT_LINK";
     const order = await Order.create({
       userId: q.user.userId,
       shippingAddress: q.address,
       billingAddress: { ...q.address },
       cartItems: q.lines.map((l) => l.cartItem),
       paymentMode: cod ? "COD" : "PREPAID",
-      paymentStatus: cod ? "COD" : "PAID",
-      orderStatus: cod ? "Pending" : "Processing",
+      paymentStatus: cod ? "COD" : link ? "PENDING" : "PAID",
+      orderStatus: cod || link ? "Pending" : "Processing",
       deliveryDate, deliverySlot,
       shippingCharges: q.priced.shipping,
       totalShipmentPrice: q.priced.shipping,
@@ -189,8 +191,19 @@ export const createManualOrder = async (req, res) => {
       paymentChannel: pay.channel, paymentReference: pay.reference, manualToken: token || undefined,
     });
 
-    if (q.coupon.code) {
+    // A coupon counts as used once the order is confirmed: now for COD / already paid,
+    // and when the customer actually pays for a payment-link order (see paymentLinkController).
+    if (q.coupon.code && !link) {
       markCouponUsed({ code: q.coupon.code, source: q.coupon.source, userId: q.user.userId }).catch((e) => console.error("markCouponUsed (manual):", e.message));
+    }
+    if (link) {
+      try {
+        const out = await issuePaymentLink(order);
+        return res.status(201).json({ success: true, data: out.order, paymentLink: out.url });
+      } catch (e) {
+        // the order exists; staff can retry the link from the Orders page
+        return res.status(201).json({ success: true, data: order, paymentLinkError: e.error?.description || e.message || "Could not create the payment link" });
+      }
     }
     res.status(201).json({ success: true, data: order });
   } catch (err) { fail(res, err); }

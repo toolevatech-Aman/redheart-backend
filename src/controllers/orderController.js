@@ -9,6 +9,7 @@ import { validateAndComputeCoupon, markCouponUsed } from '../utils/couponEngine.
 import { sendGA4Purchase } from '../utils/ga4.js';
 import { computePincodeSurcharge } from './pincodeSurchargeController.js';
 import { computeDeliverySurcharge } from './deliverySurchargeController.js';
+import { handlePaymentLinkPaid } from './paymentLinkController.js';
 
 import { createHmac } from "crypto";
 
@@ -242,6 +243,11 @@ export const razorpayOrderWebhook = async (req, res) => {
     if (expected !== signature) return res.status(400).json({ error: "invalid webhook signature" });
 
     const event = JSON.parse(body);
+    // A staff-created order paid through its Razorpay payment link
+    if (event.event === "payment_link.paid") {
+      await handlePaymentLinkPaid(event);
+      return res.status(200).json({ ok: true });
+    }
     if (event.event !== "payment.captured") return res.status(200).json({ ok: true });
 
     const payment = event.payload?.payment?.entity;

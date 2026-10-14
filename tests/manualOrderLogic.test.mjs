@@ -70,5 +70,6 @@ ok("paid offline ok", L.checkPayment({paymentMode:"PAID_OFFLINE",paymentChannel:
 throws("paid offline needs channel", ()=>L.checkPayment({paymentMode:"PAID_OFFLINE"}),"payment was received");
 throws("unknown mode", ()=>L.checkPayment({paymentMode:"CREDIT"}),"how the customer");
 
+ok("payment link mode accepted", L.checkPayment({paymentMode:"PAYMENT_LINK"}).mode==="PAYMENT_LINK");
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail?1:0);

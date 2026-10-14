@@ -10,7 +10,7 @@ const bad = (m) => { throw new ManualOrderError(m); };
 export const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const clamp = (n, lo, hi) => Math.min(Math.max(n, lo), hi);
 
-export const PAYMENT_MODES = ["COD", "PAID_OFFLINE"];          // payment links come in a later step
+export const PAYMENT_MODES = ["COD", "PAID_OFFLINE", "PAYMENT_LINK"];
 export const PAYMENT_CHANNELS = ["UPI", "Bank transfer", "Cash", "Card machine", "Other"];
 export const ORDER_CHANNELS = ["Phone call", "WhatsApp", "Instagram", "Walk-in", "Other"];
 export const MAX_LINES = 30;

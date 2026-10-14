@@ -1,0 +1,21 @@
+import * as L from "../src/utils/paymentLinkLogic.js";
+let pass = 0, fail = 0;
+const ok = (n, c, extra = "") => { c ? pass++ : fail++; console.log((c ? "PASS " : "FAIL ") + n + (c ? "" : "  " + extra)); };
+const order = { orderId: "ORDRH17919635403049959", _id: "abc", totalPrice: 1699.5, shippingAddress: { firstName: "Meera" } };
+const now = new Date("2026-10-14T10:00:00Z");
+const rq = L.buildLinkRequest({ order, user: { name: "Asha", phone: "+919876500001", email: "a@b.co" }, now });
+ok("paise amount", rq.amount === 169950 && rq.currency === "INR");
+ok("reference <= 40 chars, starts with order id", rq.reference_id.length <= 40 && rq.reference_id.startsWith("ORDRH1791963540"));
+ok("reference differs per issue time", L.buildLinkRequest({ order, user: {}, now: new Date(now.getTime() + 5000) }).reference_id !== rq.reference_id);
+ok("3 day expiry", rq.expire_by === Math.floor(now.getTime() / 1000) + 3 * 86400);
+ok("razorpay sms/email off, no partial payment", rq.notify.sms === false && rq.notify.email === false && rq.accept_partial === false);
+ok("customer details", rq.customer.contact === "+919876500001" && rq.customer.name === "Asha");
+ok("falls back to the receiver's name", L.buildLinkRequest({ order, user: null, now }).customer.name === "Meera");
+let threw = false; try { L.buildLinkRequest({ order: { ...order, totalPrice: 0.5 }, user: {}, now }); } catch { threw = true; }
+ok("tiny total rejected", threw);
+ok("status mapping", L.linkStatus({ status: "paid" }) === "paid" && L.linkStatus({ status: "expired" }) === "expired" && L.linkStatus({ status: "cancelled" }) === "cancelled" && L.linkStatus({ status: "created" }) === "created" && L.linkStatus(null) === "created");
+ok("paid payment taken from webhook payment", L.paidPayment({}, { id: "pay_1", amount: 5 }).id === "pay_1");
+ok("paid payment taken from link payments", L.paidPayment({ payments: [{ payment_id: "pay_9", amount: 5, status: "captured" }] }).id === "pay_9");
+ok("amount must match the order total", L.amountMatches(order, { amount_paid: 169950 }) && L.amountMatches(order, { amount: 169950 }) && !L.amountMatches(order, { amount: 169949 }) && !L.amountMatches(order, {}));
+console.log(`\n${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);
