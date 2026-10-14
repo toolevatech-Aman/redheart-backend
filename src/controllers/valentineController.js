@@ -4,12 +4,12 @@ import Razorpay     from "razorpay";
 import ValentinePage from "../models/ValentinePage.js";
 import ConfidentialKey from "../models/confidentialKeys.js";
 import { validateSurpriseCoupon, markSurpriseCouponUsed } from "../utils/couponEngine.js";
+import { TIER_PRICES, PLAN_MONTHS, upgradeTarget, expiryFor, isExpired } from "../utils/surprisePlans.js";
 
 // ─── Dashboard magic-link OTP store (in-memory, survives restarts poorly but fine for low volume) ──
 const dashOtpStore = new Map(); // email → { otp, expiresAt }
 
 // ─── Tier + gift pricing (server-side source of truth) ───────────────────────
-const TIER_PRICES = { free: 99, popular: 179, lifetime: 249 };
 const GIFT_PRICES = {
   "red-roses": 499, bouquet: 699, "money-plant": 399,
   succulent: 349, chocolates: 299, none: 0,
@@ -109,6 +109,7 @@ export const getValentinePage = async (req, res) => {
     const page = await ValentinePage.findOne({ slug });
     if (!page) return res.status(404).json({ error: "Page not found" });
     if (!page.isPaid) return res.status(402).json({ error: "Page not active yet" });
+    if (isExpired(page)) return res.status(410).json({ error: "expired", expired: true });
     return res.status(200).json(page);
   } catch (err) {
     console.error("getValentinePage error:", err);
@@ -192,6 +193,8 @@ export const createOrder = async (req, res) => {
 
     const tierPrice = TIER_PRICES[tierId];
     if (tierPrice === undefined) return res.status(400).json({ error: "invalid tier" });
+    // New purchases are for the two current plans only (older plans still exist on already-paid pages).
+    if (!upgradeFromTierId && !PLAN_MONTHS[tierId]) return res.status(400).json({ error: "This plan is no longer available. Please refresh and choose again." });
 
     // Coupon discount applies to the surprise-page tier price only — never
     // to giftPrice, even though both are charged in one Razorpay order.
@@ -204,8 +207,14 @@ export const createOrder = async (req, res) => {
 
     let amount;
     if (upgradeFromTierId) {
+      // An upgrade is only valid for a page that is already paid, on exactly the plan being upgraded
+      // from, and only to that plan's upgrade target (3 months -> year; older plans -> Lifetime).
+      const target = upgradeTarget(upgradeFromTierId);
+      if (tierId !== target) return res.status(400).json({ error: "invalid upgrade" });
+      const current = await ValentinePage.findOne({ slug }).select("isPaid tier").lean();
+      if (!current?.isPaid || current.tier !== upgradeFromTierId) return res.status(400).json({ error: "invalid upgrade" });
       const fromPrice = TIER_PRICES[upgradeFromTierId] ?? 0;
-      amount = Math.max(1, TIER_PRICES["lifetime"] - fromPrice);
+      amount = Math.max(1, TIER_PRICES[target] - fromPrice);
     } else {
       const giftPrice = (giftId && giftId !== "none") ? (GIFT_PRICES[giftId] || 0) : 0;
       amount = Math.max(1, tierPrice - couponDiscount) + giftPrice;
@@ -215,7 +224,7 @@ export const createOrder = async (req, res) => {
     const rzp = new Razorpay({ key_id: keyId, key_secret: keySecret });
 
     const order = await rzp.orders.create({
-      amount:   amount * 100,
+      amount:   Math.round(amount * 100),
       currency: "INR",
       receipt:  `rh_${slug}_${Date.now()}`,
     });
@@ -282,7 +291,7 @@ export const verifyPayment = async (req, res) => {
     // Compute amount server-side (cannot trust client) — coupon discount is
     // read back from the DB (set during createOrder), not from the request
     // body, so it can't be tampered with between order creation and verify.
-    const existing = await ValentinePage.findOne({ slug }).select("pendingCouponCode pendingCouponDiscount").lean();
+    const existing = await ValentinePage.findOne({ slug }).select("pendingCouponCode pendingCouponDiscount paidAt").lean();
     const couponCode     = !isUpgrade ? (existing?.pendingCouponCode || "") : "";
     const couponDiscount = !isUpgrade ? (existing?.pendingCouponDiscount || 0) : 0;
 
@@ -296,9 +305,14 @@ export const verifyPayment = async (req, res) => {
       ? `${addrObj.name}, ${addrObj.line1}, ${addrObj.city} - ${addrObj.pincode}`
       : "";
 
+    // A first payment starts the clock; an upgrade keeps the original start and re-computes the end for the new plan.
+    const paidAt = (isUpgrade && existing?.paidAt) ? existing.paidAt : new Date();
+
     const update = {
       tier:              tierId,
       isPaid:            true,
+      paidAt,
+      expiresAt:         expiryFor(tierId, paidAt),
       razorpayOrderId:   razorpay_order_id,
       razorpayPaymentId: razorpay_payment_id,
       amountPaid,
@@ -425,7 +439,7 @@ export const getMyPages = async (req, res) => {
       { email },
       {
         slug: 1, partnerName: 1, occasionKey: 1, occasion: 1,
-        isPaid: 1, tier: 1, amountPaid: 1, viewCount: 1,
+        isPaid: 1, tier: 1, amountPaid: 1, viewCount: 1, paidAt: 1, expiresAt: 1,
         responded: 1, respondedAt: 1, recipientName: 1,
         followUpAnswers: 1, createdAt: 1,
       }
@@ -540,6 +554,7 @@ export const razorpayWebhook = async (req, res) => {
 
     const tierId    = page.pendingTierId || "free";
     const tierPrice = TIER_PRICES[tierId] ?? 99;
+    const paidNow   = new Date();
     const giftId    = page.pendingGiftId || "";
     const giftPrice = (giftId && giftId !== "none") ? (GIFT_PRICES[giftId] || 0) : 0;
     const couponCode     = page.pendingCouponCode || "";
@@ -551,6 +566,8 @@ export const razorpayWebhook = async (req, res) => {
         $set: {
           isPaid:            true,
           tier:              tierId,
+          paidAt:            paidNow,
+          expiresAt:         expiryFor(tierId, paidNow),
           razorpayPaymentId: payment.id,
           amountPaid:        Math.max(1, tierPrice - couponDiscount) + giftPrice,
           giftId:            giftId,
