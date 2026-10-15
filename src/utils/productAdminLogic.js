@@ -64,15 +64,15 @@ function rows(input, existing, label, max, build) {
 }
 
 const buildVariation = (r, where) => {
-  const original = money(r.original_price, `${where}: original price`);
   const selling = money(r.selling_price, `${where}: selling price`, { allowZero: false });
+  const original = money(r.original_price, `${where}: original price`, { required: false }) ?? selling;   // blank MRP = no discount
   const out = {
     variant_id: text(r.variant_id, `${where}: variant id`, { max: 80 }),
     variant_sku: text(r.variant_sku, `${where}: SKU`, { max: 80 }),
     variant_name: text(r.variant_name, `${where}: name`, { max: 120, required: true }),
     quantity_in_bunch: whole(r.quantity_in_bunch, `${where}: quantity in bunch`),
     currency: text(r.currency || "INR", `${where}: currency`, { max: 6 }) || "INR",
-    costing_price: money(r.costing_price, `${where}: costing price`),
+    costing_price: money(r.costing_price, `${where}: costing price`, { required: false }),
     original_price: original,
     selling_price: selling,
     discount_percentage: original > 0 && selling < original ? Math.round(((original - selling) / original) * 100) : 0,
@@ -89,8 +89,8 @@ const buildAddOn = (r, where) => ({
   name: text(r.name, `${where}: name`, { max: 120, required: true }),
   product_id: text(r.product_id, `${where}: product id`, { max: 80 }),
   quantity: whole(r.quantity, `${where}: quantity`) ?? 1,
-  costing_price: money(r.costing_price, `${where}: costing price`),
-  original_price: money(r.original_price, `${where}: original price`),
+  costing_price: money(r.costing_price, `${where}: costing price`, { required: false }),
+  original_price: money(r.original_price, `${where}: original price`, { required: false }),
   selling_price: money(r.selling_price, `${where}: selling price`),
   image_url: url(r.image_url, `${where}: image`),
 });

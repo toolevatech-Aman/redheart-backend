@@ -80,5 +80,7 @@ bad("invalid restock date refused", () => L.buildProductUpdate(product, { availa
 // diff
 r = L.buildProductUpdate(product, { name: "Red Roses", selling_price: 700, quantity: 25 });
 ok("only genuinely changed fields appear in the change log", r.changes.length === 1 && r.changes[0].field === "quantity" && r.changes[0].from === 10 && r.changes[0].to === 25, r.changes);
+r = L.buildProductUpdate(product, { variations: [{ variant_name: "Solo", selling_price: 500 }] });
+ok("variation without MRP/costing saves (MRP defaults to selling price, 0% discount)", r.set.variations[0].original_price === 500 && r.set.variations[0].discount_percentage === 0 && r.set.variations[0].costing_price === undefined, r.set.variations);
 ok("empty body is refused", !!throws(() => L.buildProductUpdate(product, null)));
 console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
