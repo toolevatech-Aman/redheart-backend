@@ -45,6 +45,10 @@ bad("empty name rejected", () => L.buildProductUpdate(product, { name: "   " }),
 bad("empty description rejected", () => L.buildProductUpdate(product, { description: "" }), /Description/);
 bad("bad slug rejected (spaces)", () => L.buildProductUpdate(product, { slug: "Red Roses" }), /slug/);
 bad("bad slug rejected (double hyphen)", () => L.buildProductUpdate(product, { slug: "red--roses" }));
+bad("SKU with a hyphen is refused (the website would not find the product)", () => L.buildProductUpdate(product, { sku: "RR-2" }), /letters and numbers/);
+bad("SKU with a space is refused", () => L.buildProductUpdate(product, { sku: "RR 2" }));
+bad("SKU with regex symbols is refused", () => L.buildProductUpdate(product, { sku: "RR(2)+" }));
+ok("plain alphanumeric SKU accepted", L.buildProductUpdate(product, { sku: "100099CA" }).set.sku === "100099CA");
 ok("good slug accepted and lower-cased", L.buildProductUpdate(product, { slug: "Red-Roses-12" }).set.slug === "red-roses-12");
 ok("long name is clipped, not stored in full", L.buildProductUpdate(product, { name: "a".repeat(500) }).set.name.length === 200);
 

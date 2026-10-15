@@ -100,9 +100,19 @@ export const adminUpdateProduct = async (req, res) => {
 
     if (!changes.length) return res.json({ success: true, unchanged: true, message: "Nothing changed", changes: [], warnings, product: await fresh(product.product_id) });
 
-    const urlChanges = (set.slug !== undefined && set.slug !== before.slug) || (set.sku !== undefined && set.sku !== before.sku);
-    if (urlChanges && req.body.confirmUrlChange !== true) {
-      return res.status(409).json({ success: false, needsConfirm: "url", message: "Changing the slug or SKU changes this product's web address. Old links and Google results will stop working. Confirm to continue." });
+    // The website finds a product by the SKU at the end of its address. Changing the SKU therefore breaks every
+    // existing link to the product; changing only the slug text changes the address Google has indexed.
+    const skuChanged = set.sku !== undefined && set.sku !== before.sku;
+    const slugChanged = set.slug !== undefined && set.slug !== before.slug;
+    if ((skuChanged || slugChanged) && req.body.confirmUrlChange !== true) {
+      return res.status(409).json({ success: false, needsConfirm: "url", skuChanged, slugChanged,
+        message: skuChanged
+          ? "Changing the SKU breaks every existing link to this product, because the website finds products by SKU. Confirm to continue."
+          : "Changing the slug changes this product's web address, so Google's saved address will go out of date. Old links keep working. Confirm to continue." });
+    }
+    if (skuChanged) {
+      const dup = await Product.exists({ sku: new RegExp(`^${set.sku}$`, "i"), _id: { $ne: product._id } });
+      if (dup) return res.status(409).json({ success: false, message: "Another product already uses that SKU" });
     }
     if (set.slug !== undefined && set.slug !== before.slug) {
       const clash = await Product.exists({ slug: set.slug, _id: { $ne: product._id } });

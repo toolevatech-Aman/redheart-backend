@@ -47,6 +47,10 @@ function url(v, label, { required = false } = {}) {
 }
 
 export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+// The storefront finds a product by the LAST hyphen-separated part of its address, matched as a
+// case-insensitive regular expression (productController.getProductBySlug). So a SKU must be letters
+// and numbers only: a hyphen, space or symbol would make the product impossible to find.
+export const SKU_RE = /^[A-Za-z0-9]{1,40}$/;
 export const DELIVERY_TYPES = ["same_day", "courier"];
 
 // Variations / add-ons: keep the _id of rows that already exist (matched by _id) so nothing that
@@ -109,7 +113,11 @@ export function buildProductUpdate(product, input) {
     if (!SLUG_RE.test(s)) bad("The page address (slug) can only use lowercase letters, numbers and single hyphens");
     set.slug = s;
   }
-  if (has(input, "sku")) set.sku = text(input.sku, "SKU", { max: 80, required: true });
+  if (has(input, "sku")) {
+    const k = text(input.sku, "SKU", { max: 80, required: true });
+    if (!SKU_RE.test(k)) bad("The SKU can only use letters and numbers (no spaces, hyphens or symbols), because the website finds the product by its SKU");
+    set.sku = k;
+  }
   if (has(input, "quantity")) set.quantity = whole(input.quantity, "Stock quantity", { required: true });
   if (has(input, "costing_price")) set.costing_price = money(input.costing_price, "Costing price");
   if (has(input, "original_price")) set.original_price = money(input.original_price, "Original (MRP) price");
