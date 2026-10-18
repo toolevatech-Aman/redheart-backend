@@ -29,7 +29,7 @@ export async function sendOrderAlertEmail(order) {
     if (!transporter) return;
 
     const itemsHtml = (order.cartItems || [])
-      .map((i) => `<li>${i.name}${i.variant_name ? ` (${i.variant_name})` : ""} × ${i.quantity} — ${inr(i.selling_price)}</li>`)
+      .map((i) => `<li>${i.name}${i.variant_name ? ` (${i.variant_name})` : ""} × ${i.quantity} — ${inr(i.selling_price)}${i.cake_message ? `<br/><b>Message on cake:</b> “${String(i.cake_message).replace(/[<>&]/g, "")}”` : ""}</li>`)
       .join("");
 
     const addr = order.shippingAddress || {};

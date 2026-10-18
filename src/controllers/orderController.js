@@ -10,6 +10,7 @@ import { sendGA4Purchase } from '../utils/ga4.js';
 import { computePincodeSurcharge } from './pincodeSurchargeController.js';
 import { computeDeliverySurcharge } from './deliverySurchargeController.js';
 import { handlePaymentLinkPaid } from './paymentLinkController.js';
+import { checkCakeItems, productIdsOf } from '../utils/cakeOrderCheck.js';
 
 import { createHmac } from "crypto";
 
@@ -24,6 +25,33 @@ export const createOrder = async (req, res) => {
       const [day, month, yearRaw] = orderData.deliveryDate.split('-');
       const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw;
       orderData.deliveryDate = new Date(`${year}-${month}-${day}`);
+    }
+
+    // Cakes: clean the "message on cake" text, refuse a price below the
+    // cake's current price (size prices included) and enforce the notice
+    // period for sizes that need one (5 kg = 24 hours).
+    {
+      const ids = productIdsOf(orderData.cartItems);
+      const found = ids.all.length
+        ? await Product.find({
+            $or: [
+              { _id: { $in: ids.objectIds } },
+              { product_id: { $in: ids.all } },
+              { "variations._id": { $in: ids.objectIds } },
+            ],
+          }).select("_id product_id selling_price categorization.category_name variations._id variations.variant_name variations.selling_price").lean()
+        : [];
+      const checked = checkCakeItems({
+        items: orderData.cartItems,
+        products: found,
+        deliveryDate: orderData.deliveryDate,
+        deliverySlot: orderData.deliverySlot,
+        separate: orderData.separateDeliveries,
+      });
+      if (checked.error) {
+        return res.status(checked.error.status).json({ success: false, message: checked.error.message });
+      }
+      orderData.cartItems = checked.items;
     }
 
     // Never trust totalPrice from the client — always recompute it
@@ -381,7 +409,7 @@ export const getAllOrders = async (req, res) => {
     // times (and a contributor to a production CPU-exhaustion incident).
     const pidSet = new Set();
     orders.forEach((o) =>
-      (o.cartItems || []).forEach((ci) => ci.productId && pidSet.add(String(ci.productId)))
+      (o.cartItems || []).forEach((ci) => (ci.product_ref || ci.productId) && pidSet.add(String(ci.product_ref || ci.productId)))
     );
     const pids = [...pidSet];
     const objectIds = pids.filter((id) => /^[0-9a-fA-F]{24}$/.test(id));
@@ -410,7 +438,7 @@ export const getAllOrders = async (req, res) => {
       user: userMap[o.userId] || null,
       cartItems: (o.cartItems || []).map((ci) => ({
         ...ci,
-        product_url: productUrlMap[String(ci.productId)] || null,
+        product_url: productUrlMap[String(ci.product_ref || ci.productId)] || null,
       })),
     }));
 

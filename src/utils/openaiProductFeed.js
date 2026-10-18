@@ -92,17 +92,32 @@ function toRows(p) {
     ];
   }
 
-  // Each variation is a separate purchasable item sharing the parent's group_id.
-  return variations.map((v) => ({
+  // Cakes carry their half-kg price on the product itself and the 1/2/3/5 kg
+  // sizes as variations (no per-size stock). Emit the half-kg item too, and let
+  // the sizes inherit the cake's own stock, so the feed lists all five sizes.
+  const sizeOnly = variations.every((v) => v.inventory?.quantity_available == null && /\bkg$/i.test(v.variant_name || ""));
+  const stockOf = (v) => (sizeOnly ? p.quantity : v.inventory?.quantity_available ?? 0);
+  const rows = variations.map((v) => ({
     ...base,
     item_id: v.variant_sku || `${p.product_id}-${v.variant_id}`,
     group_id: p.product_id,
     listing_has_variations: true,
     variant_dict: { variant: v.variant_name || v.variant_sku || String(v.variant_id) },
     price: money(v.selling_price ?? p.selling_price),
-    availability: (v.inventory?.quantity_available ?? 0) > 0 ? "in_stock" : "out_of_stock",
+    availability: stockOf(v) > 0 ? "in_stock" : "out_of_stock",
     image_url: v.image_url || base.image_url,
   }));
+  if (sizeOnly) {
+    rows.unshift({
+      ...base,
+      group_id: p.product_id,
+      listing_has_variations: true,
+      variant_dict: { variant: "½ Kg" },
+      price: money(p.selling_price),
+      availability: p.quantity > 0 ? "in_stock" : "out_of_stock",
+    });
+  }
+  return rows;
 }
 
 // Returns { jsonl, rowCount, productCount } — jsonl is the full file body

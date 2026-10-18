@@ -21,8 +21,10 @@ const addOnSchema = new mongoose.Schema({
 
 const cartItemSchema = new mongoose.Schema({
   productId: String,
+  product_ref: String, // product._id even when productId is a size/variation id
   name: String,
   variant_name: String,
+  cake_message: { type: String, default: "" }, // text to be written on a cake
   image_url: String,
   selling_price: Number,
   original_price: Number,

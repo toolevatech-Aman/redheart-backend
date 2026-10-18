@@ -13,6 +13,8 @@ const cartItemSchema = new mongoose.Schema({
   productId:      String,
   name:           String,
   variant_name:   String,
+  cake_message:   String,
+  is_cake:        Boolean,
   image_url:      String,
   selling_price:  Number,
   original_price: Number,
