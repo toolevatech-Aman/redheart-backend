@@ -160,6 +160,18 @@ export const createOrder = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server Error', error: error.message });
   }
 };
+// GET /api/orders/razorpay-key — the public Razorpay key id (it is also handed to every
+// checkout), so product pages can show Razorpay's EMI widget without hardcoding the key.
+export const getRazorpayPublicKey = async (req, res) => {
+  try {
+    const keyDoc = await ConfidentialKey.findOne({ key: "RAZORPAY_KEY_ID" }).lean();
+    res.set("Cache-Control", "public, max-age=300");
+    res.json({ key_id: keyDoc?.value || null });
+  } catch {
+    res.json({ key_id: null });
+  }
+};
+
 export const verifyPayment = async (req, res) => {
   try {
     const {

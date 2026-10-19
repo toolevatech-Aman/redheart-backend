@@ -5,7 +5,8 @@ import {
   getOrdersByUser,
   getOrderById,
   updateOrderStatus,
-  verifyPayment
+  verifyPayment,
+  getRazorpayPublicKey
 } from '../controllers/orderController.js';
 import auth from '../middlewares/authMiddleware.js';
 import { checkAccess } from '../middlewares/checkAccess.js';
@@ -31,6 +32,7 @@ const router = express.Router();
 // Create order (logged-in user)
 router.post('/', auth, createOrder);
 router.post("/verify-payment", auth, verifyPayment);
+router.get('/razorpay-key', getRazorpayPublicKey); // public key id only; must sit before '/:orderId'
 // Get orders for logged-in user
 // Old route: router.get('/user/:userId', auth, getOrdersByUser);
 router.get('/user', auth, getOrdersByUser); // no need for :userId anymore
