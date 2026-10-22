@@ -10,6 +10,7 @@ import { sendGA4Purchase } from '../utils/ga4.js';
 import { computePincodeSurcharge } from './pincodeSurchargeController.js';
 import { computeDeliverySurcharge } from './deliverySurchargeController.js';
 import { handlePaymentLinkPaid } from './paymentLinkController.js';
+import { sendOpenAIPurchase, cleanAttribution } from '../utils/openaiAds.js';
 import { checkCakeItems, productIdsOf } from '../utils/cakeOrderCheck.js';
 
 import { createHmac } from "crypto";
@@ -26,6 +27,8 @@ export const createOrder = async (req, res) => {
       const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw;
       orderData.deliveryDate = new Date(`${year}-${month}-${day}`);
     }
+
+    orderData.adAttribution = cleanAttribution(orderData.adAttribution);
 
     // Cakes: clean the "message on cake" text, refuse a price below the
     // cake's current price (size prices included) and enforce the notice
@@ -234,6 +237,11 @@ export const verifyPayment = async (req, res) => {
       await markCouponUsed({ code: order.coupanApplied, source: order.coupanSource, userId: order.userId });
     }
 
+    // ChatGPT ads purchase event (server side; de-duplicated against the pixel by order id). Never blocks the response.
+    User.findOne({ userId: order.userId }).select('email phone').lean()
+      .then((u) => sendOpenAIPurchase(order, u))
+      .catch((err) => console.error('sendOpenAIPurchase failed:', err.message));
+
     // 8️⃣ Respond success
     res.json({
       success: true,
@@ -308,6 +316,9 @@ export const razorpayOrderWebhook = async (req, res) => {
           .catch((err) => console.error("markCouponUsed (webhook) failed:", err.message));
       }
       sendGA4Purchase(order).catch((err) => console.error("sendGA4Purchase failed:", err.message));
+      User.findOne({ userId: order.userId }).select("email phone").lean()
+        .then((u) => sendOpenAIPurchase(order, u))
+        .catch((err) => console.error("sendOpenAIPurchase (webhook) failed:", err.message));
 
       console.log(`[webhook] Recovered order ${order.orderId} via payment.captured (client never confirmed)`);
     }

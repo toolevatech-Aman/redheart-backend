@@ -60,6 +60,8 @@ const orderSchema = new mongoose.Schema({
   // webhook report a server-side `purchase` event if the browser never
   // returns to confirm (see orderController.razorpayOrderWebhook).
   gaClientId: { type: String, default: "" },
+  // ChatGPT ads attribution captured at checkout (the pixel's __oppref / __obref cookies); forwarded with the purchase event
+  adAttribution: { oppref: String, obref: String, userAgent: String },
   deliveryDate: Date,
   deliverySlot: String,
   shippingCharges: Number,
