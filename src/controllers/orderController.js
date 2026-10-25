@@ -11,6 +11,7 @@ import { computePincodeSurcharge } from './pincodeSurchargeController.js';
 import { computeDeliverySurcharge } from './deliverySurchargeController.js';
 import { handlePaymentLinkPaid } from './paymentLinkController.js';
 import { sendOpenAIPurchase, cleanAttribution } from '../utils/openaiAds.js';
+import { parseLookup, phoneMatches, publicOrderView, isLocked, recordFail, clearFails } from '../utils/orderTracking.js';
 import { checkCakeItems, productIdsOf } from '../utils/cakeOrderCheck.js';
 
 import { createHmac } from "crypto";
@@ -172,6 +173,34 @@ export const getRazorpayPublicKey = async (req, res) => {
     res.json({ key_id: keyDoc?.value || null });
   } catch {
     res.json({ key_id: null });
+  }
+};
+
+// POST /api/orders/track  { order, phone } — public order tracking for customers. Needs the order number AND a phone
+// number on the order, and only returns status information (no address or contact details). Reads the live order, so
+// a status change made in the admin shows up on the next request.
+const TRACK_MISS = "We couldn't find an order with that number and phone number. Check both and try again.";
+export const trackOrder = async (req, res) => {
+  try {
+    res.set("Cache-Control", "no-store");
+    const lookup = parseLookup(req.body?.order);
+    const phone = req.body?.phone;
+    if (!lookup || !phone) return res.status(400).json({ success: false, message: "Enter your order number and the phone number used on the order." });
+    const key = lookup._id || lookup.orderId;
+    if (isLocked(key)) return res.status(429).json({ success: false, message: "Too many attempts for this order. Please try again in 30 minutes or contact support." });
+
+    const order = await Order.findOne({ ...lookup, paymentStatus: { $in: ["PAID", "COD"] } })
+      .select("orderId orderStatus createdAt updatedAt deliveryDate deliverySlot cartItems billingAddress.phone shippingAddress.phone")
+      .lean();
+    if (!order || !phoneMatches(order, phone)) {
+      recordFail(key);
+      return res.status(404).json({ success: false, message: TRACK_MISS });
+    }
+    clearFails(key);
+    return res.json({ success: true, data: publicOrderView(order) });
+  } catch (err) {
+    console.error("trackOrder error:", err);
+    return res.status(500).json({ success: false, message: "Something went wrong. Please try again." });
   }
 };
 
