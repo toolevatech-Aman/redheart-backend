@@ -19,10 +19,12 @@ export const statusInfo = (s) => STATUS_INFO[s] || STATUS_INFO.Pending;
 
 // Last 10 digits of an Indian mobile number (handles +91, 91, 0 prefixes, spaces and dashes).
 export const last10 = (p) => String(p || "").replace(/\D/g, "").slice(-10);
-export const phoneMatches = (order, phone) => {
+// Accepts the sender's number, the recipient's number, or the phone on the account that placed the order
+// (customers often type a different contact number at checkout than the one they log in with).
+export const phoneMatches = (order, phone, accountPhone) => {
   const want = last10(phone);
   if (want.length < 10) return false;
-  return [order?.billingAddress?.phone, order?.shippingAddress?.phone].some((p) => last10(p) === want);
+  return [order?.billingAddress?.phone, order?.shippingAddress?.phone, accountPhone].some((p) => last10(p) === want);
 };
 
 // "ORDRH17929…" in any case, or the 24-character id shown on the old confirmation page.

@@ -15,6 +15,7 @@ ok("phone: last 10 digits, any format", T.last10("+91 98765-43210") === "9876543
 const order = { billingAddress: { phone: "9876543210" }, shippingAddress: { phone: "+91 91234 56789" } };
 ok("sender phone matches", T.phoneMatches(order, "98765 43210") && T.phoneMatches(order, "+919876543210"));
 ok("recipient phone matches", T.phoneMatches(order, "9123456789"));
+ok("account phone matches too", T.phoneMatches(order, "+91 97179 96728", "9717996728") && !T.phoneMatches(order, "9717996728") && !T.phoneMatches(order, "9717996729", "9717996728") && !T.phoneMatches(order, "12345", "12345"));
 ok("wrong / short / empty phone does not", !T.phoneMatches(order, "9000000000") && !T.phoneMatches(order, "12345") && !T.phoneMatches(order, "") && !T.phoneMatches(order, undefined));
 ok("order with no phones never matches", !T.phoneMatches({}, "9876543210") && !T.phoneMatches({ billingAddress: {}, shippingAddress: {} }, "9876543210"));
 

@@ -190,13 +190,18 @@ export const trackOrder = async (req, res) => {
     if (isLocked(key)) return res.status(429).json({ success: false, message: "Too many attempts for this order. Please try again in 30 minutes or contact support." });
 
     const order = await Order.findOne({ ...lookup, paymentStatus: { $in: ["PAID", "COD"] } })
-      .select("orderId orderStatus createdAt updatedAt deliveryDate deliverySlot cartItems billingAddress.phone shippingAddress.phone")
+      .select("orderId orderStatus createdAt updatedAt deliveryDate deliverySlot cartItems billingAddress.phone shippingAddress.phone userId")
       .lean();
-    if (!order || !phoneMatches(order, phone)) {
+    // the account's own phone also counts, so a customer can use the number they log in with
+    const account = order && !phoneMatches(order, phone) && order.userId
+      ? await User.findOne({ userId: order.userId }).select("phone").lean()
+      : null;
+    if (!order || !phoneMatches(order, phone, account?.phone)) {
       recordFail(key);
       return res.status(404).json({ success: false, message: TRACK_MISS });
     }
     clearFails(key);
+    delete order.userId; // never leaves the server (publicOrderView does not copy it either)
     return res.json({ success: true, data: publicOrderView(order) });
   } catch (err) {
     console.error("trackOrder error:", err);
