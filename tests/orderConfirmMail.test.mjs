@@ -38,6 +38,6 @@ test("no delivery date still renders", () => {
 test("includes the next-order coupon", () => {
   const m = buildConfirmationEmail(base);
   assert.match(m.html, /HAPPY100/);
-  assert.match(m.html, /₹100 off your next order/);
+  assert.match(m.html, /Flat ₹100 off on your next order/);
   assert.match(m.text, /code HAPPY100/);
 });
