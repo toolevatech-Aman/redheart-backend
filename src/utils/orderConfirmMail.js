@@ -8,6 +8,9 @@ import User from "../models/User.js";
 // verify call and the Razorpay webhook (which can both see the same order) cannot send it twice.
 
 const SITE = "https://www.redheart.in";
+// Thank-you offer in every confirmation. Same terms as the signup HAPPY100 coupon (flat 100 off, min 1000);
+// a matching shared Coupon must exist so customers who signed up before it was seeded can use it too.
+const NEXT_ORDER_CODE = { code: "HAPPY100", off: 100, min: 1000 };
 
 function getTransporter() {
   if (process.env.GMAIL_USER) {
@@ -77,6 +80,13 @@ export function buildConfirmationEmail(order) {
 
       <a href="${trackUrl}" style="display:inline-block;background:#e11d48;color:#fff;text-decoration:none;padding:13px 26px;font-size:14px">Track your order</a>
       <p style="margin:14px 0 0;font-size:12px;color:#777;line-height:1.5">You will need your order number and the phone number on the order. Questions? Reply to this email or write to us from <a href="${SITE}/contact" style="color:#be123c">${SITE.replace("https://", "")}/contact</a>.</p>
+
+      <div style="margin-top:26px;border:1px dashed #e11d48;padding:16px;text-align:center">
+        <div style="font-size:12px;color:#777">A thank-you from us</div>
+        <div style="font-size:16px;color:#111;margin:4px 0 8px">${inr(NEXT_ORDER_CODE.off)} off your next order</div>
+        <div style="display:inline-block;background:#fff1f2;padding:8px 18px;font-size:18px;font-weight:700;letter-spacing:.12em;color:#be123c">${NEXT_ORDER_CODE.code}</div>
+        <div style="font-size:11px;color:#777;margin-top:8px">Enter it at checkout. Valid on orders of ${inr(NEXT_ORDER_CODE.min)} or more, once per customer.</div>
+      </div>
     </div>
     <p style="text-align:center;font-size:11px;color:#999;margin:14px 0 0">RedHeart &middot; gifts that say it for you</p>
   </div></body></html>`;
@@ -88,6 +98,7 @@ export function buildConfirmationEmail(order) {
     ...(order.cartItems || []).map((i) => `- ${i.name}${i.variant_name ? ` (${i.variant_name})` : ""} x ${i.quantity}`),
     `Total: ${inr(order.totalPrice)} (${cod ? "pay on delivery" : "paid online"})`,
     `Track it: ${trackUrl} (order number + the phone number on the order)`,
+    `A thank-you from us: ${inr(NEXT_ORDER_CODE.off)} off your next order with code ${NEXT_ORDER_CODE.code} (orders of ${inr(NEXT_ORDER_CODE.min)} or more, once per customer).`,
   ].filter(Boolean).join("\n");
 
   return { subject: `Your RedHeart order ${order.orderId} is placed`, html, text };
