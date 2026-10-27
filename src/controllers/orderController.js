@@ -4,6 +4,7 @@ import Product from '../models/Product.js';
 import { getRazorpayInstance } from '../services/razorpay.js';
 import ConfidentialKey from '../models/confidentialKeys.js';
 import { sendOrderAlertEmail } from '../utils/orderAlertMail.js';
+import { sendOrderConfirmationEmail } from '../utils/orderConfirmMail.js';
 import { recordVendorOutcome, recordItemVendorOutcomes } from './vendorController.js';
 import { validateAndComputeCoupon, markCouponUsed } from '../utils/couponEngine.js';
 import { sendGA4Purchase } from '../utils/ga4.js';
@@ -138,6 +139,7 @@ export const createOrder = async (req, res) => {
     const order = new Order({ ...orderData, userId });
     await order.save();
     sendOrderAlertEmail(order); // fire-and-forget, never blocks the response
+    if (orderData.paymentMode === 'COD') sendOrderConfirmationEmail(order); // prepaid orders get theirs once payment is confirmed
     if (orderData.paymentMode === 'COD' && orderData.coupanApplied) {
       await markCouponUsed({ code: orderData.coupanApplied, source: orderData.coupanSource, userId });
     }
@@ -265,6 +267,7 @@ export const verifyPayment = async (req, res) => {
     order.orderStatus = 'Processing';
 
     await order.save();
+    sendOrderConfirmationEmail(order);
 
     // 7️⃣ Mark coupon as used (AFTER payment success)
     if (order.coupanApplied) {
@@ -349,6 +352,7 @@ export const razorpayOrderWebhook = async (req, res) => {
         markCouponUsed({ code: order.coupanApplied, source: order.coupanSource, userId: order.userId })
           .catch((err) => console.error("markCouponUsed (webhook) failed:", err.message));
       }
+      sendOrderConfirmationEmail(order);
       sendGA4Purchase(order).catch((err) => console.error("sendGA4Purchase failed:", err.message));
       User.findOne({ userId: order.userId }).select("email phone").lean()
         .then((u) => sendOpenAIPurchase(order, u))

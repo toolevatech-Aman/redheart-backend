@@ -62,6 +62,7 @@ const orderSchema = new mongoose.Schema({
   gaClientId: { type: String, default: "" },
   // ChatGPT ads attribution captured at checkout (the pixel's __oppref / __obref cookies); forwarded with the purchase event
   adAttribution: { oppref: String, obref: String, userAgent: String },
+  confirmationEmailSentAt: { type: Date, default: null }, // customer confirmation email, claimed atomically so it goes out once
   deliveryDate: Date,
   deliverySlot: String,
   shippingCharges: Number,
