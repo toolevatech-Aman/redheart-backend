@@ -4,11 +4,16 @@ import Product from '../models/Product.js';
 import { getRazorpayInstance } from '../services/razorpay.js';
 import ConfidentialKey from '../models/confidentialKeys.js';
 import { sendOrderAlertEmail } from '../utils/orderAlertMail.js';
+import { sendOrderConfirmationEmail } from '../utils/orderConfirmMail.js';
 import { recordVendorOutcome, recordItemVendorOutcomes } from './vendorController.js';
 import { validateAndComputeCoupon, markCouponUsed } from '../utils/couponEngine.js';
 import { sendGA4Purchase } from '../utils/ga4.js';
 import { computePincodeSurcharge } from './pincodeSurchargeController.js';
 import { computeDeliverySurcharge } from './deliverySurchargeController.js';
+import { handlePaymentLinkPaid } from './paymentLinkController.js';
+import { sendOpenAIPurchase, cleanAttribution } from '../utils/openaiAds.js';
+import { parseLookup, phoneMatches, publicOrderView, isLocked, recordFail, clearFails } from '../utils/orderTracking.js';
+import { checkCakeItems, productIdsOf } from '../utils/cakeOrderCheck.js';
 
 import { createHmac } from "crypto";
 
@@ -23,6 +28,35 @@ export const createOrder = async (req, res) => {
       const [day, month, yearRaw] = orderData.deliveryDate.split('-');
       const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw;
       orderData.deliveryDate = new Date(`${year}-${month}-${day}`);
+    }
+
+    orderData.adAttribution = cleanAttribution(orderData.adAttribution);
+
+    // Cakes: clean the "message on cake" text, refuse a price below the
+    // cake's current price (size prices included) and enforce the notice
+    // period for sizes that need one (5 kg = 24 hours).
+    {
+      const ids = productIdsOf(orderData.cartItems);
+      const found = ids.all.length
+        ? await Product.find({
+            $or: [
+              { _id: { $in: ids.objectIds } },
+              { product_id: { $in: ids.all } },
+              { "variations._id": { $in: ids.objectIds } },
+            ],
+          }).select("_id product_id selling_price categorization.category_name variations._id variations.variant_name variations.selling_price").lean()
+        : [];
+      const checked = checkCakeItems({
+        items: orderData.cartItems,
+        products: found,
+        deliveryDate: orderData.deliveryDate,
+        deliverySlot: orderData.deliverySlot,
+        separate: orderData.separateDeliveries,
+      });
+      if (checked.error) {
+        return res.status(checked.error.status).json({ success: false, message: checked.error.message });
+      }
+      orderData.cartItems = checked.items;
     }
 
     // Never trust totalPrice from the client — always recompute it
@@ -105,6 +139,7 @@ export const createOrder = async (req, res) => {
     const order = new Order({ ...orderData, userId });
     await order.save();
     sendOrderAlertEmail(order); // fire-and-forget, never blocks the response
+    if (orderData.paymentMode === 'COD') sendOrderConfirmationEmail(order); // prepaid orders get theirs once payment is confirmed
     if (orderData.paymentMode === 'COD' && orderData.coupanApplied) {
       await markCouponUsed({ code: orderData.coupanApplied, source: orderData.coupanSource, userId });
     }
@@ -131,6 +166,51 @@ export const createOrder = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server Error', error: error.message });
   }
 };
+// GET /api/orders/razorpay-key — the public Razorpay key id (it is also handed to every
+// checkout), so product pages can show Razorpay's EMI widget without hardcoding the key.
+export const getRazorpayPublicKey = async (req, res) => {
+  try {
+    const keyDoc = await ConfidentialKey.findOne({ key: "RAZORPAY_KEY_ID" }).lean();
+    res.set("Cache-Control", "public, max-age=300");
+    res.json({ key_id: keyDoc?.value || null });
+  } catch {
+    res.json({ key_id: null });
+  }
+};
+
+// POST /api/orders/track  { order, phone } — public order tracking for customers. Needs the order number AND a phone
+// number on the order, and only returns status information (no address or contact details). Reads the live order, so
+// a status change made in the admin shows up on the next request.
+const TRACK_MISS = "We couldn't find an order with that number and phone number. Check both and try again.";
+export const trackOrder = async (req, res) => {
+  try {
+    res.set("Cache-Control", "no-store");
+    const lookup = parseLookup(req.body?.order);
+    const phone = req.body?.phone;
+    if (!lookup || !phone) return res.status(400).json({ success: false, message: "Enter your order number and the phone number used on the order." });
+    const key = lookup._id || lookup.orderId;
+    if (isLocked(key)) return res.status(429).json({ success: false, message: "Too many attempts for this order. Please try again in 30 minutes or contact support." });
+
+    const order = await Order.findOne({ ...lookup, paymentStatus: { $in: ["PAID", "COD"] } })
+      .select("orderId orderStatus createdAt updatedAt deliveryDate deliverySlot cartItems billingAddress.phone shippingAddress.phone userId")
+      .lean();
+    // the account's own phone also counts, so a customer can use the number they log in with
+    const account = order && !phoneMatches(order, phone) && order.userId
+      ? await User.findOne({ userId: order.userId }).select("phone").lean()
+      : null;
+    if (!order || !phoneMatches(order, phone, account?.phone)) {
+      recordFail(key);
+      return res.status(404).json({ success: false, message: TRACK_MISS });
+    }
+    clearFails(key);
+    delete order.userId; // never leaves the server (publicOrderView does not copy it either)
+    return res.json({ success: true, data: publicOrderView(order) });
+  } catch (err) {
+    console.error("trackOrder error:", err);
+    return res.status(500).json({ success: false, message: "Something went wrong. Please try again." });
+  }
+};
+
 export const verifyPayment = async (req, res) => {
   try {
     const {
@@ -187,11 +267,17 @@ export const verifyPayment = async (req, res) => {
     order.orderStatus = 'Processing';
 
     await order.save();
+    sendOrderConfirmationEmail(order);
 
     // 7️⃣ Mark coupon as used (AFTER payment success)
     if (order.coupanApplied) {
       await markCouponUsed({ code: order.coupanApplied, source: order.coupanSource, userId: order.userId });
     }
+
+    // ChatGPT ads purchase event (server side; de-duplicated against the pixel by order id). Never blocks the response.
+    User.findOne({ userId: order.userId }).select('email phone').lean()
+      .then((u) => sendOpenAIPurchase(order, u))
+      .catch((err) => console.error('sendOpenAIPurchase failed:', err.message));
 
     // 8️⃣ Respond success
     res.json({
@@ -242,6 +328,11 @@ export const razorpayOrderWebhook = async (req, res) => {
     if (expected !== signature) return res.status(400).json({ error: "invalid webhook signature" });
 
     const event = JSON.parse(body);
+    // A staff-created order paid through its Razorpay payment link
+    if (event.event === "payment_link.paid") {
+      await handlePaymentLinkPaid(event);
+      return res.status(200).json({ ok: true });
+    }
     if (event.event !== "payment.captured") return res.status(200).json({ ok: true });
 
     const payment = event.payload?.payment?.entity;
@@ -261,7 +352,11 @@ export const razorpayOrderWebhook = async (req, res) => {
         markCouponUsed({ code: order.coupanApplied, source: order.coupanSource, userId: order.userId })
           .catch((err) => console.error("markCouponUsed (webhook) failed:", err.message));
       }
+      sendOrderConfirmationEmail(order);
       sendGA4Purchase(order).catch((err) => console.error("sendGA4Purchase failed:", err.message));
+      User.findOne({ userId: order.userId }).select("email phone").lean()
+        .then((u) => sendOpenAIPurchase(order, u))
+        .catch((err) => console.error("sendOpenAIPurchase (webhook) failed:", err.message));
 
       console.log(`[webhook] Recovered order ${order.orderId} via payment.captured (client never confirmed)`);
     }
@@ -283,7 +378,9 @@ export const getAllOrders = async (req, res) => {
     const { search = "", status, paymentMode } = req.query;
 
     const baseFilter = { paymentStatus: { $in: ["COD", "PAID"] } };
-    const filter = { ...baseFilter };
+    // The list also shows staff-created orders that are still waiting for payment (so staff can
+    // share/check their payment link); abandoned website checkouts stay hidden. Stats use baseFilter only.
+    const filter = { $and: [{ $or: [baseFilter, { source: "manual", paymentStatus: "PENDING" }] }] };
     if (status) filter.orderStatus = status;
     if (paymentMode) filter.paymentMode = new RegExp(`^${paymentMode}$`, "i");
 
@@ -299,7 +396,7 @@ export const getAllOrders = async (req, res) => {
       }).select("userId").lean();
       const matchingUserIds = matchingUsers.map((u) => u.userId);
 
-      filter.$or = [
+      filter.$and.push({ $or: [
         { orderId: rx },
         { "shippingAddress.firstName": rx },
         { "shippingAddress.lastName": rx },
@@ -307,7 +404,7 @@ export const getAllOrders = async (req, res) => {
         { "shippingAddress.city": rx },
         { "cartItems.name": rx },
         ...(matchingUserIds.length ? [{ userId: { $in: matchingUserIds } }] : []),
-      ];
+      ] });
     }
 
     // Stats reflect the full COD/PAID order set regardless of the current
@@ -373,7 +470,7 @@ export const getAllOrders = async (req, res) => {
     // times (and a contributor to a production CPU-exhaustion incident).
     const pidSet = new Set();
     orders.forEach((o) =>
-      (o.cartItems || []).forEach((ci) => ci.productId && pidSet.add(String(ci.productId)))
+      (o.cartItems || []).forEach((ci) => (ci.product_ref || ci.productId) && pidSet.add(String(ci.product_ref || ci.productId)))
     );
     const pids = [...pidSet];
     const objectIds = pids.filter((id) => /^[0-9a-fA-F]{24}$/.test(id));
@@ -402,7 +499,7 @@ export const getAllOrders = async (req, res) => {
       user: userMap[o.userId] || null,
       cartItems: (o.cartItems || []).map((ci) => ({
         ...ci,
-        product_url: productUrlMap[String(ci.productId)] || null,
+        product_url: productUrlMap[String(ci.product_ref || ci.productId)] || null,
       })),
     }));
 

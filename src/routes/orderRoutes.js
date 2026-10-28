@@ -5,7 +5,9 @@ import {
   getOrdersByUser,
   getOrderById,
   updateOrderStatus,
-  verifyPayment
+  verifyPayment,
+  getRazorpayPublicKey,
+  trackOrder
 } from '../controllers/orderController.js';
 import auth from '../middlewares/authMiddleware.js';
 import { checkAccess } from '../middlewares/checkAccess.js';
@@ -16,6 +18,10 @@ import {
   getDeliverySurchargeForPin, listDeliverySurcharges, bulkUpsertDeliverySurcharges,
   upsertDeliverySurcharge, deleteDeliverySurcharge, deliveryCostInsights,
 } from '../controllers/deliverySurchargeController.js';
+import {
+  searchCustomers, getCustomer, createCustomer, searchProducts, previewManualOrder, createManualOrder,
+} from '../controllers/manualOrderController.js';
+import { createLinkForOrder, refreshPayment, markPaidManually } from '../controllers/paymentLinkController.js';
 const isOverallAdmin = checkAccess("overall");
 
 const router = express.Router();
@@ -27,6 +33,8 @@ const router = express.Router();
 // Create order (logged-in user)
 router.post('/', auth, createOrder);
 router.post("/verify-payment", auth, verifyPayment);
+router.post('/track', trackOrder); // public: order number + phone -> status only
+router.get('/razorpay-key', getRazorpayPublicKey); // public key id only; must sit before '/:orderId'
 // Get orders for logged-in user
 // Old route: router.get('/user/:userId', auth, getOrdersByUser);
 router.get('/user', auth, getOrdersByUser); // no need for :userId anymore
@@ -59,6 +67,17 @@ router.put('/admin/delivery-surcharges/:pinCode', auth, isOverallAdmin, upsertDe
 router.delete('/admin/delivery-surcharges/:pinCode', auth, isOverallAdmin, deleteDeliverySurcharge);
 
 // Update order status
+// Admin: create an order on a customer's behalf
+router.get('/admin/customers', auth, isOverallAdmin, searchCustomers);
+router.get('/admin/customers/:userId', auth, isOverallAdmin, getCustomer);
+router.post('/admin/customers', auth, isOverallAdmin, createCustomer);
+router.get('/admin/products', auth, isOverallAdmin, searchProducts);
+router.post('/admin/manual/preview', auth, isOverallAdmin, previewManualOrder);
+router.post('/admin/manual', auth, isOverallAdmin, createManualOrder);
+router.post('/admin/:orderId/payment-link', auth, isOverallAdmin, createLinkForOrder);
+router.post('/admin/:orderId/refresh-payment', auth, isOverallAdmin, refreshPayment);
+router.post('/admin/:orderId/mark-paid', auth, isOverallAdmin, markPaidManually);
+
 router.patch('/admin/:orderId/status', auth, isOverallAdmin, updateOrderStatus);
 
 export default router;
