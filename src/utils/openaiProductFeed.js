@@ -46,15 +46,22 @@ function clamp(str, max) {
   return str.slice(0, max - 1).replace(/\s+\S*$/, "") + "…";
 }
 
-function baseFields(p) {
+// The feed spec wants a direct JPEG or PNG link; WebP is not accepted, so prefer those and skip WebP extras.
+const isJpgPng = (u) => { try { return /\.(jpe?g|png)$/i.test(decodeURIComponent(String(u).split("?")[0])); } catch { return false; } };
+const plainText = (t) => String(t || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+const SITE_RETURN_POLICY = `${SITE_URL}/refund-policy`;
+
+function baseFields(p, ads = false) {
   const category = p.categorization?.category_name || "";
   const url = getProductUrl(category, p.slug, p.product_id);
-  const images = [p.media?.primary_image_url, ...(p.media?.gallery_images || [])].filter(Boolean);
+  const all = [p.media?.primary_image_url, ...(p.media?.gallery_images || [])].filter(Boolean);
+  const good = all.filter(isJpgPng);
+  const images = good.length ? good : all;
 
   const fields = {
     item_id: p.product_id,
     title: clamp(p.name, 150),
-    description: clamp(p.description || p.short_summary || p.name, 5000),
+    description: clamp(plainText(p.description || p.short_summary || p.name), 5000),
     url,
     brand: BRAND,
     seller_name: SELLER_NAME,
@@ -71,53 +78,104 @@ function baseFields(p) {
   if (p.product_attributes?.color) fields.color = p.product_attributes.color;
   if (p.metrics?.review_count) fields.review_count = p.metrics.review_count;
   if (p.metrics?.average_rating) fields.star_rating = Number(p.metrics.average_rating.toFixed(2));
+  if (ads) { fields.return_policy = SITE_RETURN_POLICY; fields.is_ads_eligible = true; }
 
   return fields;
 }
 
-function toRows(p) {
+// Ads shows the list price with the sale price beside it; the plain feed keeps the single selling price.
+function priceFields(selling, original, ads) {
+  const sell = Number(selling), orig = Number(original);
+  if (ads && orig > sell) return { price: money(orig), sale_price: money(sell) };
+  return { price: money(sell) };
+}
+
+function toRows(p, ads = false) {
   const active = p.availability?.is_active !== false;
   if (!active) return []; // delisted products don't belong in the feed at all
 
-  const base = baseFields(p);
+  const base = baseFields(p, ads);
   const variations = p.variations || [];
+  // A variation with no stock figure of its own sells while the product does.
+  const stockOf = (v) => (v.inventory?.quantity_available ?? p.quantity) > 0;
 
   if (variations.length === 0) {
     return [
       {
         ...base,
-        price: money(p.selling_price),
+        ...priceFields(p.selling_price, p.original_price, ads),
         availability: p.quantity > 0 ? "in_stock" : "out_of_stock",
       },
     ];
   }
 
-  // Cakes carry their half-kg price on the product itself and the 1/2/3/5 kg
-  // sizes as variations (no per-size stock). Emit the half-kg item too, and let
-  // the sizes inherit the cake's own stock, so the feed lists all five sizes.
+  // Cakes carry their half-kg price on the product itself and the 1/2/3/5 kg sizes as variations. Emit the
+  // half-kg item too so the feed lists all five sizes.
   const sizeOnly = variations.every((v) => v.inventory?.quantity_available == null && /\bkg$/i.test(v.variant_name || ""));
-  const stockOf = (v) => (sizeOnly ? p.quantity : v.inventory?.quantity_available ?? 0);
-  const rows = variations.map((v) => ({
+  const titleFor = (label) => (ads && label ? clamp(`${p.name} - ${label}`, 150) : base.title);
+  // Option values must be unique inside a group: if a product accidentally has two options with the same name,
+  // number the later ones (the product data itself should still be fixed in the Product Hub).
+  const seenLabels = new Map();
+  const labelOf = (v) => {
+    const raw = v.variant_name || v.variant_sku || String(v.variant_id);
+    const n = (seenLabels.get(raw) || 0) + 1;
+    seenLabels.set(raw, n);
+    return n > 1 ? `${raw} (${n})` : raw;
+  };
+  const rows = variations.map((v) => {
+    const label = labelOf(v);
+    return {
     ...base,
+    title: titleFor(label),
     item_id: v.variant_sku || `${p.product_id}-${v.variant_id}`,
     group_id: p.product_id,
     listing_has_variations: true,
-    variant_dict: { variant: v.variant_name || v.variant_sku || String(v.variant_id) },
-    price: money(v.selling_price ?? p.selling_price),
-    availability: stockOf(v) > 0 ? "in_stock" : "out_of_stock",
-    image_url: v.image_url || base.image_url,
-  }));
+    variant_dict: { variant: label },
+    ...priceFields(v.selling_price ?? p.selling_price, v.selling_price != null ? v.original_price : p.original_price, ads),
+    availability: stockOf(v) ? "in_stock" : "out_of_stock",
+    image_url: v.image_url && isJpgPng(v.image_url) ? v.image_url : base.image_url,
+    };
+  });
   if (sizeOnly) {
     rows.unshift({
       ...base,
+      title: titleFor("½ Kg"),
+      // In the ads feed the group id must differ from every item id, or the sizes are not grouped.
+      ...(ads ? { item_id: `${p.sku || p.product_id}-HALFKG` } : {}),
       group_id: p.product_id,
       listing_has_variations: true,
       variant_dict: { variant: "½ Kg" },
-      price: money(p.selling_price),
+      ...priceFields(p.selling_price, p.original_price, ads),
       availability: p.quantity > 0 ? "in_stock" : "out_of_stock",
     });
   }
   return rows;
+}
+
+// ── Ads Manager feed (CSV) ──────────────────────────────────────────────────
+// Ads Manager -> Tools -> Feeds -> Hosted URL takes a UTF-8 CSV. Same data as the JSONL feed, plus list/sale
+// price, variant titles, return policy and ads eligibility. Columns follow
+// https://developers.openai.com/commerce/specs/file-upload/products (arrays are comma-separated, objects JSON).
+export const ADS_FEED_COLUMNS = [
+  "item_id", "title", "description", "url", "brand", "seller_name", "seller_url", "image_url", "additional_image_urls",
+  "availability", "price", "sale_price", "condition", "product_category", "group_id", "listing_has_variations",
+  "variant_dict", "color", "return_policy", "review_count", "star_rating", "is_ads_eligible",
+];
+const csvCell = (v) => {
+  if (v === undefined || v === null || v === "") return "";
+  let t = Array.isArray(v) ? v.map((u) => String(u).replace(/,/g, "%2C")).join(",") : typeof v === "object" ? JSON.stringify(v) : String(v);
+  return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+};
+export function toAdsCsv(products) {
+  const lines = [ADS_FEED_COLUMNS.join(",")];
+  let rowCount = 0;
+  for (const p of products) {
+    for (const row of toRows(p, true)) {
+      lines.push(ADS_FEED_COLUMNS.map((c) => csvCell(row[c])).join(","));
+      rowCount++;
+    }
+  }
+  return { csv: lines.join("\n") + "\n", adsRowCount: rowCount };
 }
 
 // Returns { jsonl, rowCount, productCount } — jsonl is the full file body
@@ -128,7 +186,7 @@ export async function buildOpenAIProductFeed() {
   for (const p of products) {
     for (const row of toRows(p)) lines.push(JSON.stringify(row));
   }
-  return { jsonl: lines.join("\n") + "\n", rowCount: lines.length, productCount: products.length };
+  return { jsonl: lines.join("\n") + "\n", ...toAdsCsv(products), rowCount: lines.length, productCount: products.length };
 }
 
 // The live route (GET /openai-product-feed.jsonl) must not run a full

@@ -34,7 +34,7 @@ import { razorpayWebhook, runAbandonmentEmails } from './controllers/valentineCo
 import { razorpayOrderWebhook } from './controllers/orderController.js';
 import { razorpaySubscriptionWebhook } from './controllers/subscriptionController.js';
 import { citiesSitemap } from './controllers/sitemapController.js';
-import { openaiProductFeed } from './controllers/openaiFeedController.js';
+import { openaiProductFeed, openaiAdsFeedCsv } from './controllers/openaiFeedController.js';
 import { refreshOpenAIProductFeedCache } from './utils/openaiProductFeed.js';
 import { runDailyIndexNowSubmit } from './utils/dailyIndexNowSubmit.js';
 import { runDailyContentDrop } from './utils/dailyContentDrop.js';
@@ -83,7 +83,7 @@ app.get("/robots.txt", (req, res) => {
   // was refusing to connect ("Connection failed") while the blanket
   // Disallow: / covered it too.
   res.type("text/plain").send(
-    "User-agent: *\nDisallow: /\nAllow: /openai-product-feed.jsonl"
+    "User-agent: *\nDisallow: /\nAllow: /openai-product-feed.jsonl\nAllow: /openai-ads-feed.csv"
   );
 });
 
@@ -94,7 +94,7 @@ app.get("/robots.txt", (req, res) => {
 // one, so it's excluded here the same way robots.txt already carves an
 // Allow for this one path.
 app.use((req, res, next) => {
-  if (req.path !== "/openai-product-feed.jsonl") {
+  if (req.path !== "/openai-product-feed.jsonl" && req.path !== "/openai-ads-feed.csv") {
     res.setHeader("X-Robots-Tag", "noindex, nofollow");
   }
   next();
@@ -126,6 +126,7 @@ app.use("/api/themes",          themeRoutes);
 // ── Sitemaps (public, no /api prefix) ────────────────────────────────────────
 app.get("/sitemap_cities.xml", citiesSitemap);
 app.get("/openai-product-feed.jsonl", openaiProductFeed);
+app.get("/openai-ads-feed.csv", openaiAdsFeedCsv); // OpenAI Ads Manager "Hosted URL" feed
 
 
 // Connect DB

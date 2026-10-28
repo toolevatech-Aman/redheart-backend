@@ -24,3 +24,21 @@ export const openaiProductFeed = async (req, res) => {
     return res.status(500).send("");
   }
 };
+
+/**
+ * GET /openai-ads-feed.csv
+ * Public: the "Hosted URL" feed for OpenAI Ads Manager (Tools -> Feeds). UTF-8 CSV, served from the same hourly
+ * in-memory cache as the JSONL feed. Items expire after 2 weeks in Ads Manager, so keep the Hosted URL connection
+ * rather than a one-off upload.
+ */
+export const openaiAdsFeedCsv = async (req, res) => {
+  try {
+    const { csv } = await getCachedOpenAIProductFeed();
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    return res.send(csv);
+  } catch (err) {
+    console.error("openaiAdsFeedCsv error:", err);
+    return res.status(500).send("");
+  }
+};
