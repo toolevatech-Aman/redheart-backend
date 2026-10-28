@@ -19,6 +19,7 @@ import { checkAccess } from "../middlewares/checkAccess.js";
 import { importProductsFromCSV } from "../controllers/productController.js";
 import { upload } from "../middlewares/upload.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
+import { adminListProducts, adminGetProduct, adminUpdateProduct } from "../controllers/productAdminController.js";
 import { cacheResponse } from "../middlewares/cacheMiddleware.js";
 const router = express.Router();
 const isCategoryAdmin = checkAccess("category");
@@ -29,6 +30,11 @@ router.get("/all-slugs", cacheResponse(3600), getAllProductSlugs);        // Lig
 router.post("/by-ids", getProductsByIds);            // Fetch multiple products by _id array
 router.get("/for-page", getProductsForPage);        // Fetch all products for a page (admin sequencer)
 router.get("/slug/:slug", cacheResponse(3600), getProductBySlug);         // Full product details by slug (SEO)
+// Product Hub (admin): uncached, includes inactive products. Registered before "/:product_id" on purpose.
+router.get("/admin/list", auth, isCategoryAdmin, adminListProducts);
+router.get("/admin/:product_id", auth, isCategoryAdmin, adminGetProduct);
+router.patch("/admin/:product_id", auth, isCategoryAdmin, adminUpdateProduct);
+
 router.get("/:product_id", cacheResponse(3600), getProductById);          // Full product details by product_id
 router.post("/:product_id/review", auth, updateReview); // Add/edit review — must be logged in
 

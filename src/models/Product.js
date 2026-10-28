@@ -96,6 +96,16 @@ const productSchema = new mongoose.Schema(
       },
     ],
 
+    // Who changed what, most recent last (capped). Written only by the admin Product Hub.
+    edit_history: [
+      {
+        at:      { type: Date },
+        by:      { type: String },
+        changes: [{ field: String, from: mongoose.Schema.Types.Mixed, to: mongoose.Schema.Types.Mixed, detail: [String], _id: false }],
+        _id: false,
+      },
+    ],
+
     availability: {
       is_active: { type: Boolean, default: true },
       is_featured: { type: Boolean, default: false },
