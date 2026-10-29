@@ -1,0 +1,22 @@
+import "dotenv/config";
+import mongoose from "mongoose";
+import CityPage from "../src/models/CityPage.js";
+import CategorySeoPage from "../src/models/CategorySeoPage.js";
+import BlogPost from "../src/models/BlogPost.js";
+import CategoryConfig from "../src/models/CategoryConfig.js";
+await mongoose.connect(process.env.MONGO_URI);
+const rx = /redheart/i;
+const rep = async (name, Model, field, extra = []) => {
+  const total = await Model.countDocuments();
+  const hits = await Model.find({ [field]: rx }).select([field, ...extra].join(" ")).lean();
+  console.log(`\n## ${name}.${field}: ${hits.length} of ${total} contain RedHeart`);
+  const byEnd = { endsWithBrand: 0, startsWithBrand: 0, middle: 0 };
+  hits.forEach((h) => { const t = h[field].trim(); if (/redheart\s*$/i.test(t)) byEnd.endsWithBrand++; else if (/^redheart/i.test(t)) byEnd.startsWithBrand++; else byEnd.middle++; });
+  console.log(JSON.stringify(byEnd));
+  hits.slice(0, 6).forEach((h) => console.log("  -", h[field], extra.map((e) => h[e]).join(" ")));
+};
+await rep("CityPage", CityPage, "metaTitle", ["category", "slug"]);
+await rep("CategorySeoPage", CategorySeoPage, "metaTitle", ["slug"]);
+await rep("BlogPost", BlogPost, "metaTitle", ["slug"]);
+await rep("CategoryConfig", CategoryConfig, "meta_title");
+process.exit(0);

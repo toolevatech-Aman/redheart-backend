@@ -119,9 +119,9 @@ app.use("/api/shayari-submissions", shayariSubmissionRoutes);
 app.use("/api/subscribers",     subscriberRoutes);
 app.use("/api/analytics",       analyticsRoutes);
 app.use("/api/vendors",         vendorRoutes);
+app.use("/api/themes", themeRoutes);
 app.use("/api/coupons",         couponRoutes);
 app.use("/api/reminders",       reminderRoutes);
-app.use("/api/themes",          themeRoutes);
 
 // ── Sitemaps (public, no /api prefix) ────────────────────────────────────────
 app.get("/sitemap_cities.xml", citiesSitemap);
