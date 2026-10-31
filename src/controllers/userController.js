@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import Order from "../models/order.js";
 import Cart from "../models/Cart.js";
+import { customerType } from "../utils/analyticsLogic.js";
 import { v4 as uuidv4 } from "uuid";
 
 const PRODUCT_CATEGORY_SLUG = { Flowers: "flowers", Cakes: "cakes", Plants: "plants" };
@@ -46,6 +47,7 @@ export const getAllUsersAdmin = async (req, res) => {
         $group: {
           _id: "$userId",
           count: { $sum: 1 },
+          paidCount: { $sum: { $cond: [{ $in: ["$paymentStatus", ["COD", "PAID"]] }, 1, 0] } },
           totalSpent: { $sum: "$totalPrice" },
           lastOrderDate: { $first: "$createdAt" },
           lastOrderStatus: { $first: "$orderStatus" },
@@ -129,6 +131,9 @@ export const getAllUsersAdmin = async (req, res) => {
         isVerified: u.isVerified,
         addresses: u.addresses || [],
         orderCount: orderInfo?.count || 0,
+        // new = exactly 1 paid (COD/PAID) order, repeat = 2+, none = never bought
+        paidOrderCount: orderInfo?.paidCount || 0,
+        customerType: customerType(orderInfo?.paidCount || 0),
         totalSpent: orderInfo?.totalSpent || 0,
         lastOrder: orderInfo
           ? { orderId: orderInfo.lastOrderId, date: orderInfo.lastOrderDate, status: orderInfo.lastOrderStatus }

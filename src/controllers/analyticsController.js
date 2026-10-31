@@ -3,20 +3,11 @@ import Product from "../models/Product.js";
 import User from "../models/User.js";
 import Vendor from "../models/Vendor.js";
 import { itemRevenue } from "../utils/itemRevenue.js";
+import CityPage from "../models/CityPage.js";
 import { isTestAccount } from "./userController.js";
+import { resolveRange, inRange as dateInRange, buildLocationTables, normalizeState, cityKey } from "../utils/analyticsLogic.js";
 
 const PAID_STATUSES = ["COD", "PAID"];
-
-const RANGE_DAYS = { "7d": 7, "30d": 30, "90d": 90, all: null };
-
-function rangeStart(range) {
-  const days = RANGE_DAYS[range] ?? 30;
-  if (days === null) return null;
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - (days - 1));
-  return d;
-}
 
 function monthKey(date) {
   const d = new Date(date);
@@ -34,7 +25,7 @@ function dayKey(date) {
 }
 
 /**
- * GET /api/analytics/dashboard?range=7d|30d|90d|all
+ * GET /api/analytics/dashboard?range=7d|30d|90d|all|custom[&from=YYYY-MM-DD&to=YYYY-MM-DD]
  *
  * Metric definitions (documented here since this is the single source of truth):
  *
@@ -60,7 +51,7 @@ function dayKey(date) {
  * Category/City/Revenue-trend/Order-status/Top-products ARE range-scoped.
  */
 /**
- * GET /api/analytics/margin?range=7d|30d|90d|all
+ * GET /api/analytics/margin?range=7d|30d|90d|all|custom[&from=YYYY-MM-DD&to=YYYY-MM-DD]
  *
  * Margin = revenue (order/item selling price) − vendor cost, for orders that
  * are actually Delivered with a vendor cost recorded. Orders without a
@@ -76,11 +67,11 @@ function dayKey(date) {
  */
 export const getMarginAnalytics = async (req, res) => {
   try {
-    const range = RANGE_DAYS[req.query.range] !== undefined ? req.query.range : "30d";
-    const from = rangeStart(range);
+    const win = resolveRange(req.query);
+    const { range, from, to } = win;
 
     const filter = { orderStatus: "Delivered" };
-    if (from) filter.createdAt = { $gte: from };
+    if (from || to) filter.createdAt = { ...(from ? { $gte: from } : {}), ...(to ? { $lte: to } : {}) };
 
     const orders = await Order.find(filter)
       .select("orderId totalPrice cartItems vendor itemVendors shippingAddress.city createdAt")
@@ -184,6 +175,7 @@ export const getMarginAnalytics = async (req, res) => {
     res.json({
       success: true,
       range,
+      period: { from, to, label: win.label },
       summary: {
         totalRevenue, totalCost,
         totalMargin: totalRevenue - totalCost,
@@ -207,11 +199,12 @@ export const getMarginAnalytics = async (req, res) => {
 
 export const getDashboard = async (req, res) => {
   try {
-    const range = RANGE_DAYS[req.query.range] !== undefined ? req.query.range : "30d";
-    const from = rangeStart(range);
+    const win = resolveRange(req.query);
+    const { range, from, to } = win;
 
-    const allUsers = await User.find({}).select("userId email phone").lean();
+    const allUsers = await User.find({}).select("userId email phone createdAt lastLoginAt addresses").lean();
     const testUserIds = allUsers.filter(isTestAccount).map((u) => u.userId);
+    const realUsers = allUsers.filter((u) => !isTestAccount(u));
 
     // Pull full lifetime order history once -- needed for new/repeat + cohort
     // classification, which can't be determined by looking at the range alone.
@@ -219,7 +212,7 @@ export const getDashboard = async (req, res) => {
       paymentStatus: { $in: PAID_STATUSES },
       ...(testUserIds.length ? { userId: { $nin: testUserIds } } : {}),
     })
-      .select("userId orderId totalPrice orderStatus createdAt shippingAddress.city cartItems")
+      .select("userId orderId totalPrice orderStatus createdAt shippingAddress.city shippingAddress.state cartItems")
       .sort({ createdAt: 1 })
       .lean();
 
@@ -277,7 +270,7 @@ export const getDashboard = async (req, res) => {
     const m1RetentionRate = blendedNew ? (blendedRetained / blendedNew) * 100 : 0;
 
     // ── Range-scoped orders ────────────────────────────────────────────────────
-    const inRange = from ? allOrders.filter((o) => new Date(o.createdAt) >= from) : allOrders;
+    const inRange = allOrders.filter((o) => dateInRange(o.createdAt, win));
 
     const totalOrders  = inRange.length;
     const totalRevenue = inRange.reduce((s, o) => s + (o.totalPrice || 0), 0);
@@ -297,15 +290,8 @@ export const getDashboard = async (req, res) => {
     const orderStatusBreakdown = [...statusMap.entries()].map(([status, count]) => ({ status, count }));
 
     // ── City breakdown ─────────────────────────────────────────────────────────
-    const cityMap = new Map();
-    for (const o of inRange) {
-      const city = (o.shippingAddress?.city || "Unknown").trim();
-      const cur = cityMap.get(city) || { city, orders: 0, revenue: 0 };
-      cur.orders += 1;
-      cur.revenue += o.totalPrice || 0;
-      cityMap.set(city, cur);
-    }
-    const ordersByCity = [...cityMap.values()].sort((a, b) => b.orders - a.orders).slice(0, 15);
+    // Full city / state tables (every city, with buyers and signups) are built
+    // below; the chart keeps its top 15.
 
     // ── Revenue trend (daily buckets) ──────────────────────────────────────────
     const trendMap = new Map();
@@ -365,9 +351,59 @@ export const getDashboard = async (req, res) => {
     const ordersByCategory = [...categoryMap.values()].sort((a, b) => b.revenue - a.revenue);
     const topProducts = [...productMap.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 10);
 
+    // ── Users + locations (same selected period) ───────────────────────────────
+    const cityPages = await CityPage.find({ state: { $ne: "" } }).select("cityName slug state").lean();
+    const knownStates = new Map();
+    const cityToState = new Map();
+    for (const c of cityPages) {
+      const st = normalizeState(c.state);
+      if (!st) continue;
+      knownStates.set(st.toLowerCase(), st);
+      if (!cityToState.has(cityKey(c.cityName))) cityToState.set(cityKey(c.cityName), st);
+      if (!cityToState.has(cityKey(c.slug))) cityToState.set(cityKey(c.slug), st);
+    }
+
+    const firstOrderAt = new Map(); // userId -> date of first paid order
+    for (const o of allOrders) if (!firstOrderAt.has(o.userId)) firstOrderAt.set(o.userId, o.createdAt);
+    const firstOrderInRange = new Set(
+      [...firstOrderAt.entries()].filter(([, d]) => dateInRange(d, win)).map(([id]) => id)
+    );
+    const buyersInRange = new Set(inRange.map((o) => o.userId));
+
+    const signupUsers = realUsers.filter((u) => dateInRange(u.createdAt, win));
+    const activeUsers = realUsers.filter((u) => u.lastLoginAt && dateInRange(u.lastLoginAt, win));
+    const addrOf = (u) => (u.addresses || []).find((a) => a.isDefault) || (u.addresses || [])[0] || {};
+    const signupLocs = signupUsers.map((u) => { const a = addrOf(u); return { city: a.city || "", state: a.state || "" }; });
+    const signupsWithAddress = signupLocs.filter((l) => l.city || l.state).length;
+    const signupsWhoBought = signupUsers.filter((u) => buyersInRange.has(u.userId)).length;
+
+    const { byCity, byState } = buildLocationTables({
+      orders: inRange, signups: signupLocs, firstOrderInRange, cityToState, knownStates,
+    });
+    const ordersByCity = byCity.slice(0, 15).map((c) => ({ city: c.city, orders: c.orders, revenue: c.revenue }));
+
+    const signupTrendMap = new Map();
+    for (const u of signupUsers) {
+      const dk = dayKey(u.createdAt);
+      signupTrendMap.set(dk, (signupTrendMap.get(dk) || 0) + 1);
+    }
+    const userTrend = [...signupTrendMap.entries()].map(([date, signups]) => ({ date, signups })).sort((a, b) => a.date.localeCompare(b.date));
+
+    const users = {
+      signups: signupUsers.length,
+      signupsWithAddress,
+      signupsWhoBought,
+      activeUsers: activeUsers.length,
+      buyers: buyersInRange.size,
+      newBuyers: [...buyersInRange].filter((id) => firstOrderInRange.has(id)).length,
+      returningBuyers: [...buyersInRange].filter((id) => !firstOrderInRange.has(id)).length,
+      totalUsers: realUsers.length,
+    };
+
     res.json({
       success: true,
       range,
+      period: { from, to, label: win.label },
       summary: {
         totalOrders, totalRevenue, aov,
         newCustomerOrders: newOrders.length,
@@ -379,6 +415,9 @@ export const getDashboard = async (req, res) => {
       },
       ordersByCategory,
       ordersByCity,
+      locations: { byCity, byState },
+      users,
+      userTrend,
       revenueTrend,
       orderStatusBreakdown,
       cohortRetention,

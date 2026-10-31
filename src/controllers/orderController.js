@@ -16,6 +16,7 @@ import { parseLookup, phoneMatches, publicOrderView, isLocked, recordFail, clear
 import { checkCakeItems, productIdsOf } from '../utils/cakeOrderCheck.js';
 
 import { createHmac } from "crypto";
+import { orderCustomerTags } from "../utils/analyticsLogic.js";
 
 // Create order (user)
 export const createOrder = async (req, res) => {
@@ -494,8 +495,21 @@ export const getAllOrders = async (req, res) => {
       if (p.product_id) productUrlMap[p.product_id] = url;
     }
 
+    // ── New / repeat tag: which order this is for its customer (paid orders only) ──
+    const paidOrders = userIds.length
+      ? await Order.find({ userId: { $in: userIds }, paymentStatus: { $in: ["COD", "PAID"] } }).select("userId orderId createdAt").lean()
+      : [];
+    const paidByUser = new Map();
+    for (const p of paidOrders) {
+      if (!paidByUser.has(p.userId)) paidByUser.set(p.userId, []);
+      paidByUser.get(p.userId).push(p);
+    }
+    const tags = orderCustomerTags(orders, paidByUser);
+
     const data = orders.map((o) => ({
       ...o,
+      orderSeq: tags.get(o.orderId)?.orderSeq || 1,
+      customerType: tags.get(o.orderId)?.customerType || "new",
       user: userMap[o.userId] || null,
       cartItems: (o.cartItems || []).map((ci) => ({
         ...ci,
