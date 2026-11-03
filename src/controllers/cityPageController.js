@@ -326,20 +326,47 @@ export async function getCities(req, res) {
     if (!CATEGORY_CONFIG[category]) {
       return res.status(400).json({ message: "Invalid category" });
     }
-    // Footers are ~12 KB each, so the list leaves them out (the whole set was too big to
-    // sort in memory and to send inside the admin's 20 s timeout). The list only needs
-    // to know whether a footer / FAQs exist; the edit modal loads the full page (getCityById).
-    const cities = await CityPage.aggregate([
+    // Each page carries a footer, FAQs and ~190 pinned products (~36 KB), so the list asks
+    // MongoDB for small computed values only. Search, filter and paging happen here.
+    const all = await CityPage.aggregate([
       { $match: { category } },
-      { $addFields: {
+      { $project: {
+          cityName: 1, slug: 1, url: 1, state: 1, h1: 1, metaTitle: 1, metaDescription: 1, metaKeyword: 1, isActive: 1,
           faqCount: { $size: { $ifNull: ["$faqs", []] } },
-          hasFooter: { $gt: [{ $strLenCP: { $trim: { input: { $ifNull: ["$footerContent", ""] } } } }, 0] },
+          footerLen: { $strLenCP: { $trim: { input: { $ifNull: ["$footerContent", ""] } } } },
       } },
-      { $project: { footerContent: 0, faqs: 0 } },
     ]);
-    // Sorted here: MongoDB's own sort runs ahead of the projection and still hits its 32 MB limit
-    cities.sort((a, b) => String(a.cityName).localeCompare(String(b.cityName)));
-    return res.json(cities);
+    all.sort((a, b) => String(a.cityName).localeCompare(String(b.cityName)));
+
+    const summary = {
+      total: all.length,
+      withFooter: all.filter((c) => c.footerLen > 0).length,
+      noFooter: all.filter((c) => c.footerLen === 0).length,
+      faqFull: all.filter((c) => c.faqCount >= 10).length,
+      faqPartial: all.filter((c) => c.faqCount > 0 && c.faqCount < 10).length,
+      noFaq: all.filter((c) => c.faqCount === 0).length,
+    };
+
+    const q = String(req.query.search || "").trim().toLowerCase();
+    const FILTERS = {
+      noFooter: (c) => c.footerLen === 0,
+      withFooter: (c) => c.footerLen > 0,
+      noFaq: (c) => c.faqCount === 0,
+      faqPartial: (c) => c.faqCount > 0 && c.faqCount < 10,
+      faqFull: (c) => c.faqCount >= 10,
+    };
+    const filterFn = FILTERS[req.query.filter];
+    let rows = all;
+    if (filterFn) rows = rows.filter(filterFn);
+    if (q) rows = rows.filter((c) => String(c.cityName).toLowerCase().includes(q) || String(c.state || "").toLowerCase().includes(q));
+
+    const total = rows.length;
+    if (req.query.limit === "all") return res.json({ cities: rows, total, page: 1, pages: 1, summary });
+
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const pages = Math.max(Math.ceil(total / limit), 1);
+    const page = Math.min(Math.max(parseInt(req.query.page, 10) || 1, 1), pages);
+    return res.json({ cities: rows.slice((page - 1) * limit, page * limit), total, page, pages, summary });
   } catch (err) {
     console.error("getCities error:", err);
     return res.status(500).json({ message: "Server error" });
