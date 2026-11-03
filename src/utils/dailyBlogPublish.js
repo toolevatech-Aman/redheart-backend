@@ -15,7 +15,7 @@ import { revalidateBlogListing } from "./revalidateFrontend.js";
 // the exact same vertical/author/rate config instead of a second copy that
 // could drift out of sync.
 export const VERTICALS = [
-  { categorySlug: "flower", author: "Trishna" },
+  { categorySlug: "flowers", author: "Trishna" },
   { categorySlug: "cakes",  author: "Pallavi" },
   { categorySlug: "plants", author: "Maya" },
 ];

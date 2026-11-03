@@ -326,10 +326,33 @@ export async function getCities(req, res) {
     if (!CATEGORY_CONFIG[category]) {
       return res.status(400).json({ message: "Invalid category" });
     }
-    const cities = await CityPage.find({ category }).sort({ cityName: 1 });
+    // Footers are ~12 KB each, so the list leaves them out (the whole set was too big to
+    // sort in memory and to send inside the admin's 20 s timeout). The list only needs
+    // to know whether a footer / FAQs exist; the edit modal loads the full page (getCityById).
+    const cities = await CityPage.aggregate([
+      { $match: { category } },
+      { $sort: { cityName: 1 } },
+      { $addFields: {
+          faqCount: { $size: { $ifNull: ["$faqs", []] } },
+          hasFooter: { $gt: [{ $strLenCP: { $trim: { input: { $ifNull: ["$footerContent", ""] } } } }, 0] },
+      } },
+      { $project: { footerContent: 0, faqs: 0 } },
+    ]).allowDiskUse(true);
     return res.json(cities);
   } catch (err) {
     console.error("getCities error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
+
+/** Admin — one full city page (with footer and FAQs) for the edit modal. */
+export async function getCityById(req, res) {
+  try {
+    const city = await CityPage.findById(req.params.id);
+    if (!city) return res.status(404).json({ message: "City page not found" });
+    return res.json(city);
+  } catch (err) {
+    console.error("getCityById error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 }

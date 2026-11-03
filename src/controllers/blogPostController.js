@@ -14,6 +14,7 @@ export async function listBlogPosts(req, res) {
       .populate("category", "name slug")
       .populate("additionalCategories", "name slug")
       .populate("subcategory", "name slug")
+      .select("-content") // the list never shows bodies; ~500 of them made this take 20+ s and time out the admin
       .sort({ createdAt: -1 })
       .lean();
     return res.json(posts);

@@ -4,6 +4,7 @@ import { checkAccess } from "../middlewares/checkAccess.js";
 import { cacheResponse } from "../middlewares/cacheMiddleware.js";
 import {
   getCities,
+  getCityById,
   getCitiesPublic,
   getAllCitySlugs,
   addCity,
@@ -20,6 +21,7 @@ const auth   = [authMiddleware, checkAccess("seo", "category")];
 
 // ── Admin routes (auth + seo/category access) ─────────────────────────────────
 router.get("/cities/:category",              ...auth, getCities);
+router.get("/city-by-id/:id",                ...auth, getCityById);
 router.post("/cities",                       ...auth, addCity);
 router.post("/cities/bulk",                  ...auth, addCitiesBulk);
 router.post("/cities/regenerate/:category",  ...auth, regenerateCities);
