@@ -331,12 +331,12 @@ export async function getCities(req, res) {
     // to know whether a footer / FAQs exist; the edit modal loads the full page (getCityById).
     const cities = await CityPage.aggregate([
       { $match: { category } },
-      { $sort: { cityName: 1 } },
       { $addFields: {
           faqCount: { $size: { $ifNull: ["$faqs", []] } },
           hasFooter: { $gt: [{ $strLenCP: { $trim: { input: { $ifNull: ["$footerContent", ""] } } } }, 0] },
       } },
-      { $project: { footerContent: 0, faqs: 0 } },
+      { $project: { footerContent: 0, faqs: 0 } },   // before the sort, so the sort only holds small documents
+      { $sort: { cityName: 1 } },
     ]).allowDiskUse(true);
     return res.json(cities);
   } catch (err) {
