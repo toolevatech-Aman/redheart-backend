@@ -291,6 +291,10 @@ export const updateProfile = async (req, res) => {
     // If addresses are provided, append them instead of replacing
     if (addresses !== undefined && Array.isArray(addresses)) {
       addresses.forEach((addr) => {
+        // A missing first name must not block the address: use the account name, else "User"
+        if (!String(addr.firstName || "").trim()) {
+          addr.firstName = String(user.name || "").trim().split(/\s+/)[0] || "User";
+        }
         // If addr.isDefault is true, unset other defaults
         if (addr.isDefault === true) {
           user.addresses.forEach((a) => (a.isDefault = false));
