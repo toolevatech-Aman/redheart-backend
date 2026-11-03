@@ -335,9 +335,10 @@ export async function getCities(req, res) {
           faqCount: { $size: { $ifNull: ["$faqs", []] } },
           hasFooter: { $gt: [{ $strLenCP: { $trim: { input: { $ifNull: ["$footerContent", ""] } } } }, 0] },
       } },
-      { $project: { footerContent: 0, faqs: 0 } },   // before the sort, so the sort only holds small documents
-      { $sort: { cityName: 1 } },
-    ]).allowDiskUse(true);
+      { $project: { footerContent: 0, faqs: 0 } },
+    ]);
+    // Sorted here: MongoDB's own sort runs ahead of the projection and still hits its 32 MB limit
+    cities.sort((a, b) => String(a.cityName).localeCompare(String(b.cityName)));
     return res.json(cities);
   } catch (err) {
     console.error("getCities error:", err);
