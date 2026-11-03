@@ -97,6 +97,16 @@ const orderSchema = new mongoose.Schema({
   paymentLinkExpiresAt: { type: Date, default: null },
   paidAt: { type: Date, default: null },
 
+
+  // ── Extra money collected from the customer after the order (added by staff) ──
+  // totalPrice already includes extraAmount, so revenue, analytics and exports pick it up as is.
+  extraAmount: { type: Number, default: 0 },
+  extraCharges: [{
+    amount: { type: Number, required: true },
+    reason: { type: String, default: "" },
+    addedBy: { type: String, default: "" },   // userId of the admin
+    addedAt: { type: Date, default: Date.now },
+  }],
   orderStatus: { type: String, default: 'Pending' }, // Pending, Processing, Shipped, Delivered, Cancelled
 
   // ── Vendor assignment (manual, via ops) ──────────────────────────────────

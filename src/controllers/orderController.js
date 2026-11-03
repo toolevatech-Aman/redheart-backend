@@ -586,3 +586,56 @@ export const updateOrderStatus = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server Error', error: error.message });
   }
 };
+
+// ── Extra charges: money collected from the customer that the order did not record ──
+// totalPrice is raised/lowered together with extraAmount, so every revenue figure includes it.
+const MAX_EXTRA = 100000;
+const sendExtra = (res, order) => res.json({ success: true, data: { orderId: order.orderId, totalPrice: order.totalPrice, extraAmount: order.extraAmount || 0, extraCharges: order.extraCharges || [] } });
+
+export const addExtraCharge = async (req, res) => {
+  try {
+    const amount = Math.round(Number(req.body?.amount) * 100) / 100;
+    const reason = String(req.body?.reason || "").trim().slice(0, 200);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_EXTRA) {
+      return res.status(400).json({ success: false, message: `Enter an amount between ₹1 and ₹${MAX_EXTRA.toLocaleString("en-IN")}` });
+    }
+    if (!reason) return res.status(400).json({ success: false, message: "Add a short reason (for example: extra delivery charge, add-on taken in cash)" });
+    const order = await Order.findOne({ orderId: req.params.orderId });
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+    if (order.orderStatus === "Cancelled") return res.status(400).json({ success: false, message: "This order is cancelled" });
+    if (order.paymentStatus === "PENDING" || order.paymentStatus === "FAILED") {
+      return res.status(400).json({ success: false, message: "This order has not been paid yet. Add the extra amount after the payment is received (or put it in the order itself)." });
+    }
+    const updated = await Order.findOneAndUpdate(
+      { _id: order._id },
+      {
+        $inc: { totalPrice: amount, extraAmount: amount },
+        $push: { extraCharges: { amount, reason, addedBy: String(req.user?.userId || req.user?.id || req.user?._id || ""), addedAt: new Date() } },
+      },
+      { new: true }
+    );
+    sendExtra(res, updated);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Server Error", error: error.message });
+  }
+};
+
+export const removeExtraCharge = async (req, res) => {
+  try {
+    const order = await Order.findOne({ orderId: req.params.orderId });
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+    const entry = (order.extraCharges || []).find((c) => String(c._id) === String(req.params.chargeId));
+    if (!entry) return res.status(404).json({ success: false, message: "Extra charge not found" });
+    const updated = await Order.findOneAndUpdate(
+      { _id: order._id, "extraCharges._id": entry._id },
+      { $inc: { totalPrice: -entry.amount, extraAmount: -entry.amount }, $pull: { extraCharges: { _id: entry._id } } },
+      { new: true }
+    );
+    if (!updated) return res.status(409).json({ success: false, message: "Already removed" });
+    sendExtra(res, updated);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Server Error", error: error.message });
+  }
+};

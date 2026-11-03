@@ -7,7 +7,8 @@ import {
   updateOrderStatus,
   verifyPayment,
   getRazorpayPublicKey,
-  trackOrder
+  trackOrder,
+  addExtraCharge, removeExtraCharge,
 } from '../controllers/orderController.js';
 import auth from '../middlewares/authMiddleware.js';
 import { checkAccess } from '../middlewares/checkAccess.js';
@@ -77,7 +78,8 @@ router.post('/admin/manual', auth, isOverallAdmin, createManualOrder);
 router.post('/admin/:orderId/payment-link', auth, isOverallAdmin, createLinkForOrder);
 router.post('/admin/:orderId/refresh-payment', auth, isOverallAdmin, refreshPayment);
 router.post('/admin/:orderId/mark-paid', auth, isOverallAdmin, markPaidManually);
-
+router.post('/admin/:orderId/extra-charge', auth, isOverallAdmin, addExtraCharge);
+router.delete('/admin/:orderId/extra-charge/:chargeId', auth, isOverallAdmin, removeExtraCharge);
 router.patch('/admin/:orderId/status', auth, isOverallAdmin, updateOrderStatus);
 
 export default router;
