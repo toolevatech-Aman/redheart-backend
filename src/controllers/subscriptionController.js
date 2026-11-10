@@ -1,6 +1,7 @@
 import { createHmac } from "crypto";
 import ConfidentialKey from "../models/confidentialKeys.js";
 import Subscriber from "../models/Subscriber.js";
+import { handleClaimSubscriptionEvent } from "./bakeryClaimController.js";
 import { sendGA4Subscription } from "../utils/ga4.js";
 
 async function getRazorpayKeys() {
@@ -124,6 +125,9 @@ export const razorpaySubscriptionWebhook = async (req, res) => {
     const paymentEntity = event.payload?.payment?.entity;
     const razorpaySubscriptionId = subEntity?.id || paymentEntity?.subscription_id;
     if (!razorpaySubscriptionId) return res.status(200).json({ ok: true });
+
+    // Bakery-profile subscriptions (from the /cake-shop claim flow) are tracked on the claim, not as shayari subscribers
+    if (await handleClaimSubscriptionEvent(event.event, subEntity)) return res.status(200).json({ ok: true });
 
     const subscriber = await Subscriber.findOne({ razorpaySubscriptionId });
     if (!subscriber) return res.status(200).json({ ok: true });

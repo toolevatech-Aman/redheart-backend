@@ -15,6 +15,12 @@ const bakeryClaimSchema = new mongoose.Schema(
     status:    { type: String, enum: ["new", "contacted", "verified", "active", "rejected"], default: "new" },
     notes:     { type: String, default: "" }, // admin's own follow-up notes
     sourceUrl: { type: String, default: "" },
+    // paid plan (Razorpay subscription, monthly)
+    paymentStatus: { type: String, enum: ["none", "pending", "paid", "failed", "cancelled", "halted"], default: "none" },
+    razorpayCustomerId: { type: String, default: "" },
+    razorpaySubscriptionId: { type: String, default: "", index: true },
+    paidPlan: { type: String, enum: ["", "basic", "pro"], default: "" },
+    paidAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
