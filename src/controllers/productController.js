@@ -359,6 +359,10 @@ const reviewProjection = {
   rating: "$customer_reviews.rating",
   comment: "$customer_reviews.comment",
   verifiedPurchase: "$customer_reviews.verifiedPurchase",
+  verified: { $or: [
+    { $eq: [{ $ifNull: ["$customer_reviews.verified", false] }, true] },
+    { $eq: [{ $ifNull: ["$customer_reviews.verifiedPurchase", false] }, true] },
+  ] },
   status: { $ifNull: ["$customer_reviews.status", "approved"] },
   imported: { $ifNull: ["$customer_reviews.imported", false] },
   date: "$customer_reviews.review_date",
@@ -442,13 +446,17 @@ export const moderateProductReview = async (req, res) => {
     const product = await findReviewProduct(reviewId);
     if (!product) return res.status(404).json({ success: false, message: "Review not found" });
     const review = product.customer_reviews.id(reviewId);
-    const { status, name, comment } = req.body;
+    const { status, name, comment, verified } = req.body;
     if (status != null && !REVIEW_STATUSES.includes(status)) return res.status(400).json({ success: false, message: "Invalid review status" });
     if (name != null) review.name = String(name).trim().slice(0, 120);
     if (comment != null) {
       const cleanComment = String(comment).trim();
       if (!cleanComment || cleanComment.length > 2500) return res.status(400).json({ success: false, message: "Review text must be 1-2500 characters" });
       review.comment = cleanComment;
+    }
+    if (verified != null) {
+      if (typeof verified !== "boolean") return res.status(400).json({ success: false, message: "Verified must be true or false" });
+      review.verified = verified;
     }
     if (status != null) {
       review.status = status;

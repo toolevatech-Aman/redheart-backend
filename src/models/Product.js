@@ -57,6 +57,8 @@ const productSchema = new mongoose.Schema(
         review_date:      { type: Date },
         comment:          { type: String },
         verifiedPurchase: { type: Boolean, default: false },
+        // Separate from an order-backed verifiedPurchase flag; controlled by Admin.
+        verified:         { type: Boolean, default: false },
         // Existing reviews predate moderation and therefore remain public.
         // All newly submitted or imported reviews explicitly start pending.
         status: {
