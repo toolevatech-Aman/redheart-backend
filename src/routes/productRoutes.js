@@ -8,6 +8,7 @@ import {
   getProductsByIds,
   getProductsForPage,
   updateReview,
+  importProductReviews,
   addProduct,
   editProduct,
   deleteProduct,
@@ -39,6 +40,7 @@ router.get("/:product_id", cacheResponse(3600), getProductById);          // Ful
 router.post("/:product_id/review", auth, updateReview); // Add/edit review — must be logged in
 
 // Admin APIs
+router.post("/admin/reviews/import", auth, checkAccess("overall"), importProductReviews);
 router.post("/", auth, isCategoryAdmin, addProduct);
 router.put("/:product_id", auth, isCategoryAdmin, editProduct);
 router.patch("/:product_id/delivery-type", auth, isCategoryAdmin, updateDeliveryType);

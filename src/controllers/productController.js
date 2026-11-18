@@ -1,5 +1,7 @@
 // controllers/productController.js
 import Product from "../models/Product.js";
+import User from "../models/User.js";
+import Order from "../models/order.js";
 import { resolveFiltersFromPageKey } from "../utils/urlFilters.js";
 import { invalidateCache } from "../middlewares/cacheMiddleware.js";
 import fs from "fs";
@@ -325,6 +327,144 @@ export const updateReview = async (req, res) => {
     res.json({ message: "Review saved", product });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const REVIEW_IMPORT_LIMIT = 250;
+
+// POST /products/admin/reviews/import
+// Imports a bounded batch from a trusted admin-side spreadsheet export. The
+// operation is idempotent per product + email, so retrying a failed request
+// updates the same review instead of duplicating it.
+export const importProductReviews = async (req, res) => {
+  try {
+    const { reviews } = req.body;
+    if (!Array.isArray(reviews) || reviews.length === 0) {
+      return res.status(400).json({ message: "Provide a non-empty reviews array" });
+    }
+    if (reviews.length > REVIEW_IMPORT_LIMIT) {
+      return res.status(400).json({ message: `Import at most ${REVIEW_IMPORT_LIMIT} reviews per request` });
+    }
+
+    const normalized = reviews.map((row, index) => ({
+      index,
+      productId: String(row.productId || row.product_id || "").trim(),
+      sku: String(row.sku || "").trim(),
+      name: String(row.name || row.reviewerName || row.reviewer_name || "").trim(),
+      email: String(row.email || row.reviewerEmail || row.reviewer_email || "").trim().toLowerCase(),
+      rating: Number(row.rating),
+      comment: String(row.comment || row.reviewText || row.review_text || "").trim(),
+      reviewDate: row.reviewDate || row.review_date || row.timestamp,
+    }));
+
+    const productIds = [...new Set(normalized.map((row) => row.productId).filter(Boolean))];
+    const skus = [...new Set(normalized.map((row) => row.sku).filter(Boolean))];
+    const products = await Product.find({
+      $or: [{ product_id: { $in: productIds } }, { sku: { $in: skus } }],
+    }).select("product_id sku slug customer_reviews metrics +customer_reviews.reviewerEmail");
+    const productById = new Map(products.map((product) => [product.product_id, product]));
+    const productBySku = new Map(products.map((product) => [product.sku, product]));
+
+    const emails = [...new Set(normalized.map((row) => row.email).filter(Boolean))];
+    const users = await User.find({ email: { $in: emails } }).select("userId email").lean();
+    const userByEmail = new Map(users.map((user) => [String(user.email).toLowerCase(), user]));
+
+    const userIds = users.map((user) => user.userId);
+    const productRefs = products.flatMap((product) => [product.product_id, product._id.toString()]);
+    const verifiedPurchases = new Set();
+    if (userIds.length && productRefs.length) {
+      const orders = await Order.find({
+        userId: { $in: userIds },
+        paymentStatus: { $in: ["COD", "PAID"] },
+        "cartItems.productId": { $in: productRefs },
+      }).select("userId cartItems.productId").lean();
+      const productIdByRef = new Map(products.flatMap((product) => [
+        [product.product_id, product.product_id],
+        [product._id.toString(), product.product_id],
+      ]));
+      for (const order of orders) {
+        for (const item of order.cartItems || []) {
+          const productId = productIdByRef.get(String(item.productId));
+          if (productId) verifiedPurchases.add(`${order.userId}:${productId}`);
+        }
+      }
+    }
+
+    const changedProducts = new Set();
+    const errors = [];
+    let created = 0;
+    let updated = 0;
+    let verifiedPurchaseCount = 0;
+
+    for (const row of normalized) {
+      const productFromId = row.productId ? productById.get(row.productId) : null;
+      const productFromSku = row.sku ? productBySku.get(row.sku) : null;
+      if (!row.productId || !row.sku || !row.name || !row.comment || !EMAIL_PATTERN.test(row.email) || !Number.isInteger(row.rating) || row.rating < 1 || row.rating > 5) {
+        errors.push({ row: row.index + 1, message: "Missing or invalid product ID, SKU, reviewer, email, rating, or review text" });
+        continue;
+      }
+      if (!productFromId || !productFromSku || productFromId._id.toString() !== productFromSku._id.toString()) {
+        errors.push({ row: row.index + 1, message: "Product ID and SKU do not identify the same product" });
+        continue;
+      }
+      if (row.name.length > 120 || row.comment.length > 2500) {
+        errors.push({ row: row.index + 1, message: "Reviewer name or review text exceeds the allowed length" });
+        continue;
+      }
+      const reviewDate = row.reviewDate ? new Date(row.reviewDate) : new Date();
+      if (Number.isNaN(reviewDate.getTime())) {
+        errors.push({ row: row.index + 1, message: "Invalid review date" });
+        continue;
+      }
+
+      const product = productFromId;
+      const user = userByEmail.get(row.email);
+      const isVerifiedPurchase = Boolean(user && verifiedPurchases.has(`${user.userId}:${product.product_id}`));
+      const existing = product.customer_reviews.find((review) =>
+        String(review.reviewerEmail || "").toLowerCase() === row.email || (user && review.userId === user.userId)
+      );
+      const payload = {
+        userId: user?.userId,
+        name: row.name,
+        reviewerEmail: row.email,
+        rating: row.rating,
+        comment: row.comment,
+        review_date: reviewDate,
+        verifiedPurchase: isVerifiedPurchase,
+      };
+
+      if (existing) {
+        Object.assign(existing, payload);
+        updated += 1;
+      } else {
+        product.customer_reviews.push(payload);
+        created += 1;
+      }
+      if (isVerifiedPurchase) verifiedPurchaseCount += 1;
+      changedProducts.add(product);
+    }
+
+    for (const product of changedProducts) {
+      const reviewCount = product.customer_reviews.length;
+      const totalRating = product.customer_reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
+      product.metrics.review_count = reviewCount;
+      product.metrics.average_rating = reviewCount ? totalRating / reviewCount : 0;
+      await product.save();
+      invalidateCache(`/api/products/${product.product_id}`, product.slug && `/api/products/slug/${product.slug}`);
+    }
+
+    res.json({
+      success: true,
+      processed: normalized.length,
+      created,
+      updated,
+      rejected: errors.length,
+      verifiedPurchaseCount,
+      errors: errors.slice(0, 100),
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Review import failed", error: err.message });
   }
 };
 

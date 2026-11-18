@@ -50,6 +50,9 @@ const productSchema = new mongoose.Schema(
       {
         userId:           { type: String },
         name:             { type: String, default: "" },
+        // Stored for deduplication and purchase verification only; never
+        // returned or rendered on the public product page.
+        reviewerEmail:    { type: String, default: "", select: false },
         rating:           { type: Number },
         review_date:      { type: Date },
         comment:          { type: String },
