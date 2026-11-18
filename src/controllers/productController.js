@@ -431,6 +431,7 @@ export const listProductReviews = async (req, res) => {
     countRows.forEach(({ _id, count }) => { if (REVIEW_STATUSES.includes(_id)) counts[_id] = count; });
     res.json({ success: true, reviews, counts, total: totalResult[0]?.total || 0, page, limit });
   } catch (err) {
+    console.error("listProductReviews:", err);
     res.status(500).json({ success: false, message: "Could not load reviews" });
   }
 };
