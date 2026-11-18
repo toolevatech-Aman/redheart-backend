@@ -164,6 +164,9 @@ export const getProductById = async (req, res) => {
 );
 
     if (!product) return res.status(404).json({ message: "Product not found" });
+    product.customer_reviews = product.customer_reviews.filter(
+      (review) => (review.status || "approved") === "approved"
+    );
     res.json(product);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -184,6 +187,9 @@ export const getProductBySlug = async (req, res) => {
       "-costing_price -care_and_logistics.add_ons.costing_price -variations.costing_price"
     );
     if (!product) return res.status(404).json({ message: "Product not found" });
+    product.customer_reviews = product.customer_reviews.filter(
+      (review) => (review.status || "approved") === "approved"
+    );
     res.json(product);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -282,12 +288,13 @@ export const updateReview = async (req, res) => {
     if (!ratingNum || ratingNum < 1 || ratingNum > 5) {
       return res.status(400).json({ message: "Rating must be between 1 and 5" });
     }
+    const cleanComment = String(comment || "").trim();
+    if (!cleanComment || cleanComment.length > 2500) {
+      return res.status(400).json({ message: "Review text must be 1-2500 characters" });
+    }
 
     const product = await Product.findOne({ product_id });
     if (!product) return res.status(404).json({ message: "Product not found" });
-
-    const User = (await import("../models/User.js")).default;
-    const Order = (await import("../models/order.js")).default;
 
     const user = await User.findOne({ userId }).select("name").lean();
 
@@ -301,32 +308,219 @@ export const updateReview = async (req, res) => {
     const existing = product.customer_reviews.find((r) => r.userId === userId);
     if (existing) {
       existing.rating = ratingNum;
-      existing.comment = comment;
+      existing.comment = cleanComment;
       existing.review_date = new Date();
       existing.verifiedPurchase = !!purchaseOrder;
+      existing.status = "pending";
+      existing.moderatedBy = "";
+      existing.moderatedAt = null;
       if (user?.name) existing.name = user.name;
     } else {
       product.customer_reviews.push({
         userId,
         name: user?.name || "",
         rating: ratingNum,
-        comment,
+        comment: cleanComment,
         review_date: new Date(),
         verifiedPurchase: !!purchaseOrder,
+        status: "pending",
       });
     }
 
-    // Recalculate metrics
-    const totalRating = product.customer_reviews.reduce((acc, r) => acc + r.rating, 0);
-    product.metrics.review_count = product.customer_reviews.length;
-    product.metrics.average_rating = totalRating / product.customer_reviews.length;
+    recalculateReviewMetrics(product);
 
     await product.save();
 
     invalidateCache(`/api/products/${product_id}`, product.slug && `/api/products/slug/${product.slug}`);
-    res.json({ message: "Review saved", product });
+    res.json({ message: "Thanks! Your review will appear once it is approved." });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+const approvedReviews = (product) => product.customer_reviews.filter(
+  (review) => (review.status || "approved") === "approved"
+);
+
+const recalculateReviewMetrics = (product) => {
+  const reviews = approvedReviews(product);
+  const totalRating = reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
+  product.metrics.review_count = reviews.length;
+  product.metrics.average_rating = reviews.length ? totalRating / reviews.length : 0;
+};
+
+const REVIEW_STATUSES = ["pending", "approved", "rejected"];
+const REVIEW_ADMIN_LIMIT = 100;
+
+const reviewProjection = {
+  _id: 0,
+  id: { $toString: "$customer_reviews._id" },
+  name: "$customer_reviews.name",
+  rating: "$customer_reviews.rating",
+  comment: "$customer_reviews.comment",
+  verifiedPurchase: "$customer_reviews.verifiedPurchase",
+  status: { $ifNull: ["$customer_reviews.status", "approved"] },
+  imported: { $ifNull: ["$customer_reviews.imported", false] },
+  date: "$customer_reviews.review_date",
+  moderatedBy: "$customer_reviews.moderatedBy",
+  moderatedAt: "$customer_reviews.moderatedAt",
+  product: {
+    productId: "$product_id",
+    name: "$name",
+    sku: "$sku",
+    slug: "$slug",
+    category: "$categorization.category_name",
+  },
+};
+
+const reviewMetricSummary = async (product) => {
+  recalculateReviewMetrics(product);
+  await product.save();
+  invalidateCache(`/api/products/${product.product_id}`, product.slug && `/api/products/slug/${product.slug}`);
+};
+
+// GET /products/admin/reviews — paginated moderation queue.
+export const listProductReviews = async (req, res) => {
+  try {
+    const status = String(req.query.status || "pending").toLowerCase();
+    const query = String(req.query.q || "").trim();
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(REVIEW_ADMIN_LIMIT, Math.max(1, Number(req.query.limit) || 25));
+    if (status !== "all" && !REVIEW_STATUSES.includes(status)) {
+      return res.status(400).json({ success: false, message: "Invalid review status" });
+    }
+
+    const filters = [];
+    if (status !== "all") {
+      filters.push(status === "approved"
+        ? { $or: [{ "customer_reviews.status": "approved" }, { "customer_reviews.status": { $exists: false } }] }
+        : { "customer_reviews.status": status });
+    }
+    if (query) {
+      const search = { $regex: query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
+      filters.push({ $or: [
+        { "customer_reviews.name": search },
+        { "customer_reviews.comment": search },
+        { name: search },
+        { sku: search },
+        { product_id: search },
+      ] });
+    }
+    const match = filters.length === 0 ? {} : filters.length === 1 ? filters[0] : { $and: filters };
+    const basePipeline = [{ $unwind: "$customer_reviews" }, { $match: match }];
+    const [totalResult, reviews, countRows] = await Promise.all([
+      Product.aggregate([...basePipeline, { $count: "total" }]),
+      Product.aggregate([
+        ...basePipeline,
+        { $sort: { "customer_reviews.review_date": -1 } },
+        { $skip: (page - 1) * limit },
+        { $limit: limit },
+        { $project: reviewProjection },
+      ]),
+      Product.aggregate([
+        { $unwind: "$customer_reviews" },
+        { $project: { status: { $ifNull: ["$customer_reviews.status", "approved"] } } },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+    ]);
+    const counts = { pending: 0, approved: 0, rejected: 0 };
+    countRows.forEach(({ _id, count }) => { if (REVIEW_STATUSES.includes(_id)) counts[_id] = count; });
+    res.json({ success: true, reviews, counts, total: totalResult[0]?.total || 0, page, limit });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Could not load reviews" });
+  }
+};
+
+const findReviewProduct = (reviewId) => Product.findOne({ "customer_reviews._id": reviewId }).select("product_id slug customer_reviews");
+const adminLabel = (req) => req.user?.email || req.user?.userId || "Admin";
+
+// PATCH /products/admin/reviews/:reviewId — edit wording or moderate one review.
+export const moderateProductReview = async (req, res) => {
+  try {
+    const { reviewId } = req.params;
+    if (!/^[a-f\d]{24}$/i.test(reviewId)) return res.status(400).json({ success: false, message: "Invalid review ID" });
+    const product = await findReviewProduct(reviewId);
+    if (!product) return res.status(404).json({ success: false, message: "Review not found" });
+    const review = product.customer_reviews.id(reviewId);
+    const { status, name, comment } = req.body;
+    if (status != null && !REVIEW_STATUSES.includes(status)) return res.status(400).json({ success: false, message: "Invalid review status" });
+    if (name != null) review.name = String(name).trim().slice(0, 120);
+    if (comment != null) {
+      const cleanComment = String(comment).trim();
+      if (!cleanComment || cleanComment.length > 2500) return res.status(400).json({ success: false, message: "Review text must be 1-2500 characters" });
+      review.comment = cleanComment;
+    }
+    if (status != null) {
+      review.status = status;
+      review.moderatedBy = adminLabel(req);
+      review.moderatedAt = new Date();
+    }
+    await reviewMetricSummary(product);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Could not update review" });
+  }
+};
+
+const validateReviewIds = (ids) => Array.isArray(ids) && ids.length > 0 && ids.length <= REVIEW_ADMIN_LIMIT && ids.every((id) => /^[a-f\d]{24}$/i.test(String(id)));
+
+// POST /products/admin/reviews/bulk — approve/reject a page selection.
+export const bulkModerateProductReviews = async (req, res) => {
+  try {
+    const { ids, status } = req.body;
+    if (!validateReviewIds(ids) || !REVIEW_STATUSES.includes(status)) return res.status(400).json({ success: false, message: "Invalid review selection or status" });
+    const reviewIds = ids.map(String);
+    const products = await Product.find({ "customer_reviews._id": { $in: reviewIds } }).select("product_id slug customer_reviews");
+    let updated = 0;
+    for (const product of products) {
+      for (const review of product.customer_reviews) {
+        if (reviewIds.includes(review._id.toString())) {
+          review.status = status;
+          review.moderatedBy = adminLabel(req);
+          review.moderatedAt = new Date();
+          updated += 1;
+        }
+      }
+      await reviewMetricSummary(product);
+    }
+    res.json({ success: true, updated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Could not update reviews" });
+  }
+};
+
+// DELETE /products/admin/reviews/:reviewId — permanently remove one review.
+export const deleteProductReview = async (req, res) => {
+  try {
+    const { reviewId } = req.params;
+    if (!/^[a-f\d]{24}$/i.test(reviewId)) return res.status(400).json({ success: false, message: "Invalid review ID" });
+    const product = await findReviewProduct(reviewId);
+    if (!product) return res.status(404).json({ success: false, message: "Review not found" });
+    product.customer_reviews.pull(reviewId);
+    await reviewMetricSummary(product);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Could not delete review" });
+  }
+};
+
+// POST /products/admin/reviews/bulk-delete — permanently remove a selection.
+export const bulkDeleteProductReviews = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!validateReviewIds(ids)) return res.status(400).json({ success: false, message: "Invalid review selection" });
+    const reviewIds = ids.map(String);
+    const products = await Product.find({ "customer_reviews._id": { $in: reviewIds } }).select("product_id slug customer_reviews");
+    let deleted = 0;
+    for (const product of products) {
+      const before = product.customer_reviews.length;
+      for (const reviewId of reviewIds) product.customer_reviews.pull(reviewId);
+      deleted += before - product.customer_reviews.length;
+      await reviewMetricSummary(product);
+    }
+    res.json({ success: true, deleted });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Could not delete reviews" });
   }
 };
 
@@ -432,6 +626,8 @@ export const importProductReviews = async (req, res) => {
         comment: row.comment,
         review_date: reviewDate,
         verifiedPurchase: isVerifiedPurchase,
+        status: "pending",
+        imported: true,
       };
 
       if (existing) {
@@ -446,12 +642,7 @@ export const importProductReviews = async (req, res) => {
     }
 
     for (const product of changedProducts) {
-      const reviewCount = product.customer_reviews.length;
-      const totalRating = product.customer_reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
-      product.metrics.review_count = reviewCount;
-      product.metrics.average_rating = reviewCount ? totalRating / reviewCount : 0;
-      await product.save();
-      invalidateCache(`/api/products/${product.product_id}`, product.slug && `/api/products/slug/${product.slug}`);
+      await reviewMetricSummary(product);
     }
 
     res.json({

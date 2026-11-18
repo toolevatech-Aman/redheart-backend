@@ -9,6 +9,11 @@ import {
   getProductsForPage,
   updateReview,
   importProductReviews,
+  listProductReviews,
+  moderateProductReview,
+  bulkModerateProductReviews,
+  deleteProductReview,
+  bulkDeleteProductReviews,
   addProduct,
   editProduct,
   deleteProduct,
@@ -40,6 +45,11 @@ router.get("/:product_id", cacheResponse(3600), getProductById);          // Ful
 router.post("/:product_id/review", auth, updateReview); // Add/edit review — must be logged in
 
 // Admin APIs
+router.get("/admin/reviews", auth, checkAccess("overall"), listProductReviews);
+router.patch("/admin/reviews/:reviewId", auth, checkAccess("overall"), moderateProductReview);
+router.post("/admin/reviews/bulk", auth, checkAccess("overall"), bulkModerateProductReviews);
+router.delete("/admin/reviews/:reviewId", auth, checkAccess("overall"), deleteProductReview);
+router.post("/admin/reviews/bulk-delete", auth, checkAccess("overall"), bulkDeleteProductReviews);
 router.post("/admin/reviews/import", auth, checkAccess("overall"), importProductReviews);
 router.post("/", auth, isCategoryAdmin, addProduct);
 router.put("/:product_id", auth, isCategoryAdmin, editProduct);

@@ -57,6 +57,16 @@ const productSchema = new mongoose.Schema(
         review_date:      { type: Date },
         comment:          { type: String },
         verifiedPurchase: { type: Boolean, default: false },
+        // Existing reviews predate moderation and therefore remain public.
+        // All newly submitted or imported reviews explicitly start pending.
+        status: {
+          type: String,
+          enum: ["pending", "approved", "rejected"],
+          default: "approved",
+        },
+        moderatedBy: { type: String, default: "" },
+        moderatedAt: { type: Date, default: null },
+        imported: { type: Boolean, default: false },
       },
     ],
 
