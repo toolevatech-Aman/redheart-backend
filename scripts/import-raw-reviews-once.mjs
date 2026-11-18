@@ -33,7 +33,7 @@ try {
   const markers = mongoose.connection.db.collection("migration_markers");
   if (await markers.findOne({ key: MARKER })) throw new Error("This one-time review import has already run");
   const rows = (await csvRows()).map((row, index) => ({ row: index + 2, sku: String(row.SKU || "").trim(), productId: String(row["Product ID"] || "").trim(), name: String(row["Reviewer Name"] || "").trim(), rating: Number(row.Rating), comment: String(row["Review Text"] || "").trim(), email: String(row["Email (verified)"] || "").trim().toLowerCase(), date: validDate(row["Timestamp (IST)"]) }));
-  const products = await Product.find({ $or: [{ product_id: { $in: [...new Set(rows.map((row) => row.productId).filter(Boolean))] } }, { sku: { $in: [...new Set(rows.map((row) => row.sku).filter(Boolean))] } }] }).select("product_id sku customer_reviews metrics +customer_reviews.reviewerEmail");
+  const products = await Product.find({ $or: [{ product_id: { $in: [...new Set(rows.map((row) => row.productId).filter(Boolean))] } }, { sku: { $in: [...new Set(rows.map((row) => row.sku).filter(Boolean))] } }] }).select("+customer_reviews.reviewerEmail");
   const byId = new Map(products.map((product) => [product.product_id, product]));
   const bySku = new Map(products.map((product) => [product.sku, product]));
   const users = await User.find({ email: { $in: [...new Set(rows.map((row) => row.email).filter(Boolean))] } }).select("userId email").lean();

@@ -556,7 +556,7 @@ export const importProductReviews = async (req, res) => {
     const skus = [...new Set(normalized.map((row) => row.sku).filter(Boolean))];
     const products = await Product.find({
       $or: [{ product_id: { $in: productIds } }, { sku: { $in: skus } }],
-    }).select("product_id sku slug customer_reviews metrics +customer_reviews.reviewerEmail");
+    }).select("+customer_reviews.reviewerEmail");
     const productById = new Map(products.map((product) => [product.product_id, product]));
     const productBySku = new Map(products.map((product) => [product.sku, product]));
 
