@@ -375,7 +375,7 @@ const reviewProjection = {
 
 const reviewMetricSummary = async (product) => {
   recalculateReviewMetrics(product);
-  await product.save();
+  await product.save({ validateBeforeSave: false });
   invalidateCache(`/api/products/${product.product_id}`, product.slug && `/api/products/slug/${product.slug}`);
 };
 

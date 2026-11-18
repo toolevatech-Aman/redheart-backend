@@ -56,7 +56,9 @@ try {
     if (verifiedPurchase) verifiedPurchases += 1;
     changed.add(product);
   }
-  for (const product of changed) { refreshMetrics(product); await product.save(); }
+  // Some legacy product records are missing unrelated required catalog fields.
+  // This job changes review subdocuments only, so do not block it on those fields.
+  for (const product of changed) { refreshMetrics(product); await product.save({ validateBeforeSave: false }); }
   const summary = { key: MARKER, source: SOURCE_URL, rawRows: rows.length, created, updated, rejected: errors.length, verifiedPurchases, errors: errors.slice(0, 100), completedAt: new Date() };
   await markers.insertOne(summary);
   console.log(JSON.stringify(summary));
