@@ -476,17 +476,24 @@ const validateReviewIds = (ids) => Array.isArray(ids) && ids.length > 0 && ids.l
 // POST /products/admin/reviews/bulk — approve/reject a page selection.
 export const bulkModerateProductReviews = async (req, res) => {
   try {
-    const { ids, status } = req.body;
-    if (!validateReviewIds(ids) || !REVIEW_STATUSES.includes(status)) return res.status(400).json({ success: false, message: "Invalid review selection or status" });
+    const { ids, status, verified } = req.body;
+    const hasStatus = status != null;
+    const hasVerified = verified != null;
+    if (!validateReviewIds(ids) || (!hasStatus && !hasVerified) || (hasStatus && !REVIEW_STATUSES.includes(status)) || (hasVerified && typeof verified !== "boolean")) {
+      return res.status(400).json({ success: false, message: "Invalid review selection or update" });
+    }
     const reviewIds = ids.map(String);
     const products = await Product.find({ "customer_reviews._id": { $in: reviewIds } }).select("product_id slug customer_reviews");
     let updated = 0;
     for (const product of products) {
       for (const review of product.customer_reviews) {
         if (reviewIds.includes(review._id.toString())) {
-          review.status = status;
-          review.moderatedBy = adminLabel(req);
-          review.moderatedAt = new Date();
+          if (hasStatus) {
+            review.status = status;
+            review.moderatedBy = adminLabel(req);
+            review.moderatedAt = new Date();
+          }
+          if (hasVerified) review.verified = verified;
           updated += 1;
         }
       }
