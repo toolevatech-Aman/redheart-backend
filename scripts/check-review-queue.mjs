@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import Product from "../src/models/Product.js";
+import { listProductReviews } from "../src/controllers/productController.js";
 
 dotenv.config();
 try {
@@ -19,5 +20,8 @@ try {
     Product.aggregate([{ $unwind: "$customer_reviews" }, { $project: { status: { $ifNull: ["$customer_reviews.status", "approved"] } } }, { $group: { _id: "$status", count: { $sum: 1 } } }]),
   ]);
   console.log(JSON.stringify({ success: true, count: rows.length, total: total[0]?.total, counts, sample: rows[0] }));
+  const response = { statusCode: 200, body: null, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; } };
+  await listProductReviews({ query: { status: "pending", q: "", page: "1", limit: "50" } }, response);
+  console.log(JSON.stringify({ controllerStatus: response.statusCode, controllerTotal: response.body?.total, controllerError: response.body?.message }));
 } catch (error) { console.error(error.stack || error.message); process.exitCode = 1; }
 finally { await mongoose.disconnect(); }
